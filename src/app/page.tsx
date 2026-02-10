@@ -1,5 +1,5 @@
-import { PLASMIC } from "../lib/plasmic";
-import { PlasmicRootProvider, PlasmicComponent } from "@plasmicapp/loader-nextjs";
+import { PLASMIC } from "@/lib/plasmic";
+import PlasmicRenderer from "@/components/plasmic/PlasmicRenderer";
 
 export default async function PlasmicPage({
   params,
@@ -15,8 +15,9 @@ export default async function PlasmicPage({
   }
 
   return (
-    <PlasmicRootProvider loader={PLASMIC} prefetchedData={componentData}>
-      <PlasmicComponent component={slug} />
-    </PlasmicRootProvider>
+    <PlasmicRenderer
+      component={slug}
+      prefetchedData={componentData}
+    />
   );
 }
