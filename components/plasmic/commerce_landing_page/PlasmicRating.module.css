@@ -1,0 +1,46 @@
+.root {
+  display: inline-flex;
+  flex-direction: row;
+  position: relative;
+  width: auto;
+  height: auto;
+  justify-content: center;
+  align-items: center;
+  column-gap: 4px;
+  padding: 8px 12px;
+}
+.svg__qwFSa {
+  position: relative;
+  object-fit: cover;
+  max-width: 100%;
+  color: var(--token-x6Ey2LBKTT-r);
+  height: 1em;
+}
+.svg__tjDqk {
+  position: relative;
+  object-fit: cover;
+  max-width: 100%;
+  color: var(--token-x6Ey2LBKTT-r);
+  height: 1em;
+}
+.svg__mjGrT {
+  position: relative;
+  object-fit: cover;
+  max-width: 100%;
+  color: var(--token-x6Ey2LBKTT-r);
+  height: 1em;
+}
+.svg__rGDm {
+  position: relative;
+  object-fit: cover;
+  max-width: 100%;
+  color: var(--token-x6Ey2LBKTT-r);
+  height: 1em;
+}
+.svg__gDrvs {
+  position: relative;
+  object-fit: cover;
+  max-width: 100%;
+  color: var(--token-x6Ey2LBKTT-r);
+  height: 1em;
+}

@@ -1,0 +1,120 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  position: relative;
+}
+.link {
+  display: flex;
+  position: relative;
+  box-shadow: 0px 4px 8px 0px #0000000d;
+  flex-direction: column;
+  cursor: pointer;
+  max-width: 256px;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 12px;
+}
+.linksmall {
+  height: 100%;
+  box-shadow: none;
+  min-height: 0;
+  border: 1px solid #e5e5ea;
+}
+.root .link:focus {
+  box-shadow: 0px 0px 0px 3px #007aff80;
+  outline: none;
+}
+.img {
+  object-fit: cover;
+  max-height: 200px;
+  position: relative;
+  min-width: 256px;
+}
+.img > picture > img {
+  object-fit: cover;
+}
+.freeBox___94ERb {
+  display: block;
+  position: relative;
+}
+.rootsmall:hover .freeBoxsmall___94ERbLozPx {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  background: #ffffffcc;
+}
+.freeBox__nOrks {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  top: auto;
+  left: auto;
+  transition-property: all;
+  transition-duration: 0.25s;
+  transition-timing-function: ease-out;
+  row-gap: 8px;
+  -webkit-transition-property: all;
+  -webkit-transition-timing-function: ease-out;
+  -webkit-transition-duration: 0.25s;
+  padding: 24px;
+}
+.freeBoxsmall__nOrksLozPx {
+  display: none;
+}
+.rootsmall:hover .freeBoxsmall__nOrksLozPx {
+  opacity: 1;
+}
+.freeBox__tAVN {
+  display: flex;
+  position: relative;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.text__lrAy {
+  position: relative;
+  font-size: 12px;
+  background: var(--token-e0nDx9vjceD3);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+.rating__kzPwk:global(.__wab_instance) {
+  position: relative;
+}
+.freeBox__d1IG {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  row-gap: 4px;
+}
+.text__nkJvj {
+  font-family: "Poppins", sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  white-space: pre;
+  color: #333333;
+  text-align: left;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.text__ilYbG {
+  width: 100%;
+  height: auto;
+  text-align: left;
+  color: var(--token-gQmBvm_gSuL8);
+  min-width: 0;
+}
+.price:global(.__wab_instance) {
+  position: relative;
+}
