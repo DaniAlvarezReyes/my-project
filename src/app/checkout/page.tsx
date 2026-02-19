@@ -8,12 +8,13 @@ import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, subtotal, shipping, tax, total } = useCart();
+  const { items, subtotal, shipping, tax, total, clearCart } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,11 +24,11 @@ export default function CheckoutPage() {
     lastName: user?.lastName || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    street: user?.address?.street || '',
-    city: user?.address?.city || '',
-    state: user?.address?.state || '',
-    postalCode: user?.address?.postalCode || '',
-    country: user?.address?.country || 'España',
+    street: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: 'España',
   });
 
   useEffect(() => {
@@ -60,6 +61,49 @@ export default function CheckoutPage() {
         return;
       }
 
+      // Primero, guardar el pedido en Supabase
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user?.id,
+          status: 'pending',
+          subtotal: subtotal,
+          shipping: shipping,
+          tax: tax,
+          total: total,
+          payment_method: 'card',
+          shipping_address: shippingInfo,
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error('Error creating order:', orderError);
+        setError('Error al crear el pedido. Intenta de nuevo.');
+        setLoading(false);
+        return;
+      }
+
+      // Guardar los items del pedido
+      if (order) {
+        const orderItems = items.map(item => ({
+          order_id: order.id,
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price,
+          selected_size: item.selectedSize || null,
+          selected_color: item.selectedColor || null,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+
+        if (itemsError) {
+          console.error('Error creating order items:', itemsError);
+        }
+      }
+
       // Crear sesión de Stripe
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -69,6 +113,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           items,
           userId: user?.id,
+          orderId: order.id, // Pasar el ID del pedido
           shippingInfo,
         }),
       });
@@ -78,6 +123,9 @@ export default function CheckoutPage() {
       if (!response.ok) {
         throw new Error(data.error || 'Error al crear la sesión de pago');
       }
+
+      // Guardar el orderId en localStorage para actualizar después del pago
+      localStorage.setItem('pendingOrderId', order.id);
 
       // Redirigir a Stripe Checkout
       const stripe = await stripePromise;
@@ -93,6 +141,7 @@ export default function CheckoutPage() {
         throw new Error(stripeError.message);
       }
     } catch (err: any) {
+      console.error('Checkout error:', err);
       setError(err.message || 'Error al procesar el pago');
       setLoading(false);
     }

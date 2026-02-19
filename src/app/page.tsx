@@ -200,6 +200,7 @@ export default function Home() {
             title: 'Comprar',
             links: [
               { label: 'Todos los productos', href: '/productos' },
+              { label: 'Categorías', href: '/categorias' },
               { label: 'Novedades', href: '/productos?filter=nuevos' },
               { label: 'Ofertas', href: '/productos?filter=ofertas' },
             ],

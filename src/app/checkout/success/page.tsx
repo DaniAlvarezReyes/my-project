@@ -6,24 +6,57 @@ import { MainNav } from '@/components/MainNav';
 import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { useCart } from '@/context/CartContext';
+import { supabase } from '@/lib/supabase';
 
 export default function SuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { clearCart } = useCart();
   const [sessionId, setSessionId] = useState('');
+  const [processed, setProcessed] = useState(false);
 
   useEffect(() => {
-    const session = searchParams.get('session_id');
-    if (session) {
-      setSessionId(session);
-      // Limpiar el carrito después de un pago exitoso
-      clearCart();
-    } else {
-      // Si no hay session_id, redirigir al inicio
-      router.push('/');
-    }
-  }, [searchParams, clearCart, router]);
+    const processSuccess = async () => {
+      if (processed) return;
+
+      const session = searchParams.get('session_id');
+      if (session) {
+        setSessionId(session);
+        
+        // Actualizar el pedido en Supabase
+        const pendingOrderId = localStorage.getItem('pendingOrderId');
+        if (pendingOrderId) {
+          try {
+            const { error } = await supabase
+              .from('orders')
+              .update({ 
+                status: 'processing',
+                payment_intent_id: session 
+              })
+              .eq('id', pendingOrderId);
+
+            if (error) {
+              console.error('Error updating order:', error);
+            }
+
+            // Limpiar localStorage
+            localStorage.removeItem('pendingOrderId');
+          } catch (err) {
+            console.error('Error:', err);
+          }
+        }
+
+        // Limpiar el carrito
+        clearCart();
+        setProcessed(true);
+      } else {
+        // Si no hay session_id, redirigir al inicio
+        router.push('/');
+      }
+    };
+
+    processSuccess();
+  }, [searchParams, clearCart, router, processed]);
 
   return (
     <div className="min-h-screen bg-gray-50">

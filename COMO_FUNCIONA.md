@@ -4,13 +4,13 @@
 
 ```
 USUARIO ve la web
-        ↓
+       ↓
     page.tsx (página principal)
-        ↓
+       ↓
 Usa componentes de /components
-        ↓
+       ↓
 Que tienen estilos de Tailwind
-        ↓
+       ↓
 Todo renderizado por Next.js
 ```
 

@@ -7,10 +7,11 @@ import { useCart } from '@/context/CartContext';
 import { products } from '@/data/products';
 import { categories } from '@/data/categories';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 export default function ProductosPage() {
   const { addItem } = useCart();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('categoria') || 'all');
   const [selectedBrand, setSelectedBrand] = useState<string[]>([]);
@@ -77,6 +78,10 @@ export default function ProductosPage() {
   const handleAddToCart = (product: any) => {
     addItem(product);
     alert(`${product.name} añadido al carrito!`);
+  };
+
+  const handleViewDetails = (productId: string) => {
+    router.push(`/productos/${productId}`);
   };
 
   return (
@@ -251,7 +256,7 @@ export default function ProductosPage() {
                     key={product.id}
                     product={product}
                     onAddToCart={() => handleAddToCart(product)}
-                    onViewDetails={() => {}}
+                    onViewDetails={() => handleViewDetails(product.id)}
                     currency="€"
                   />
                 ))}
