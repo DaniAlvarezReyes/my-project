@@ -29,6 +29,17 @@ export default function ProductosPage() {
   const filteredProducts = useMemo(() => {
     let filtered = products;
 
+    // Filtro de búsqueda
+    const searchQuery = searchParams.get('buscar');
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        p.brand.toLowerCase().includes(query) ||
+        p.description.toLowerCase().includes(query)
+      );
+    }
+
     // Filtro especial desde URL
     const filter = searchParams.get('filter');
     if (filter === 'ofertas') {

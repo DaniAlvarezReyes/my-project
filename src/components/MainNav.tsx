@@ -72,44 +72,62 @@ export const MainNav = () => {
                 {item.name}
               </Link>
             ))}
+            
+            {/* Búsqueda simple */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Buscar..."
+                className="w-48 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = (e.target as HTMLInputElement).value;
+                    if (value) window.location.href = `/productos?buscar=${value}`;
+                  }
+                }}
+              />
+              <svg className="absolute right-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
           </div>
 
-          {/* Right Side: Cart and User */}
-          <div className="flex items-center space-x-4">
-            {/* Cart Icon */}
+          {/* Actions */}
+          <div className="hidden md:flex items-center space-x-4">
+            {/* Carrito */}
             <Link href="/carrito" className="relative p-2 text-gray-700 hover:text-blue-600">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {itemCount}
                 </span>
               )}
             </Link>
 
-            {/* User Menu */}
-            {isAuthenticated && user ? (
+            {/* Usuario con CLICK */}
+            {isAuthenticated ? (
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 focus:outline-none"
                 >
                   <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                    {user.name?.charAt(0).toUpperCase() || 'U'}
+                    {user?.name?.charAt(0).toUpperCase() || 'U'}
                   </div>
-                  <span className="hidden md:block font-medium">{user.name}</span>
+                  <span className="font-medium">{user?.name}</span>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
-                {/* Dropdown Menu */}
+                {/* Dropdown con CLICK */}
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl py-2 z-50 border border-gray-200">
                     <div className="px-4 py-3 border-b border-gray-200">
-                      <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                      <p className="text-xs text-gray-600 truncate">{user.email}</p>
+                      <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
+                      <p className="text-xs text-gray-600 truncate">{user?.email}</p>
                     </div>
 
                     <Link
@@ -181,38 +199,70 @@ export const MainNav = () => {
                 )}
               </div>
             ) : (
-              <Link href="/auth/login">
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                  Iniciar Sesión
-                </button>
+              <Link
+                href="/auth/login"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Iniciar Sesión
               </Link>
             )}
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-gray-700"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
           </div>
+
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 text-gray-700"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {mobileMenuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {item.name}
+          <div className="md:hidden py-4 border-t">
+            <div className="flex flex-col space-y-3">
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`${
+                    isActive(item.href) ? 'text-blue-600 font-semibold' : 'text-gray-700'
+                  } py-2`}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
+              ))}
+              <Link href="/carrito" className="flex items-center space-x-2 text-gray-700 py-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <span>Carrito {itemCount > 0 && `(${itemCount})`}</span>
               </Link>
-            ))}
+              {isAuthenticated ? (
+                <>
+                  <Link href="/cuenta" className="text-gray-700 py-2">
+                    Mi Cuenta
+                  </Link>
+                  <Link href="/cuenta/pedidos" className="text-gray-700 py-2">
+                    Mis Pedidos
+                  </Link>
+                  <button onClick={logout} className="text-left text-gray-700 py-2">
+                    Cerrar Sesión
+                  </button>
+                </>
+              ) : (
+                <Link href="/auth/login" className="text-blue-600 font-semibold py-2">
+                  Iniciar Sesión
+                </Link>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -87,7 +87,7 @@ export default function ContactoPage() {
               <p className="text-sm text-blue-800 mb-3">
                 Muchas preguntas comunes ya están respondidas en nuestra sección de preguntas frecuentes.
               </p>
-              <a href="#" className="text-blue-600 font-medium text-sm hover:text-blue-700">
+              <a href="/faq" className="text-blue-600 font-medium text-sm hover:text-blue-700">
                 Ver FAQ →
               </a>
             </div>

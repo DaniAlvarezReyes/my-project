@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { MainNav } from '@/components/MainNav';
 import { Hero } from '@/components/Hero';
 import { ProductCard } from '@/components/ProductCard';
@@ -11,6 +12,7 @@ import { getFeaturedProducts, getOnSaleProducts } from '@/data/products';
 import { categories } from '@/data/categories';
 
 export default function Home() {
+  const router = useRouter();
   const { addItem } = useCart();
   const featuredProducts = getFeaturedProducts();
   const onSaleProducts = getOnSaleProducts();
@@ -18,6 +20,10 @@ export default function Home() {
   const handleAddToCart = (product: any) => {
     addItem(product);
     alert(`${product.name} añadido al carrito!`);
+  };
+
+  const handleViewDetails = (productId: string) => {
+    router.push(`/productos/${productId}`);
   };
 
   return (
@@ -95,7 +101,7 @@ export default function Home() {
                 key={product.id}
                 product={product}
                 onAddToCart={() => handleAddToCart(product)}
-                onViewDetails={() => {}}
+                onViewDetails={handleViewDetails}
                 currency="€"
               />
             ))}
@@ -125,7 +131,7 @@ export default function Home() {
                   key={product.id}
                   product={product}
                   onAddToCart={() => handleAddToCart(product)}
-                  onViewDetails={() => {}}
+                  onViewDetails={handleViewDetails}
                   currency="€"
                 />
               ))}
@@ -208,6 +214,7 @@ export default function Home() {
           {
             title: 'Ayuda',
             links: [
+              { label: 'FAQ', href: '/faq' },
               { label: 'Envíos', href: '/legal/envios' },
               { label: 'Devoluciones', href: '/legal/devoluciones' },
               { label: 'Contacto', href: '/contacto' },

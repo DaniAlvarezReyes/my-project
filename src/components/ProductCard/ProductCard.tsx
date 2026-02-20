@@ -1,18 +1,8 @@
 import React from 'react';
 import { Button } from '../Button';
 import { Rating } from '../Rating';
-
-export interface Product {
-  id: string;
-  name: string;
-  price: number;
-  originalPrice?: number;
-  image: string;
-  rating?: number;
-  reviews?: number;
-  badge?: string;
-  inStock?: boolean;
-}
+import { Product } from '@/types';
+import { useFavorites } from '@/context/FavoritesContext';
 
 export interface ProductCardProps {
   product: Product;
@@ -27,6 +17,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onViewDetails,
   currency = '€',
 }) => {
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const isLiked = isFavorite(product.id);
+
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0;
@@ -36,9 +29,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-gray-100">
         <img
-          src={product.image}
+          src={product.images?.[0] || 'https://via.placeholder.com/400x400?text=No+Image'}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = 'https://via.placeholder.com/400x400?text=Error';
+          }}
         />
         
         {/* Badge */}
@@ -70,6 +67,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Content */}
       <div className="p-4">
+        {/* Brand */}
+        {product.brand && (
+          <p className="text-sm text-gray-600 mb-1">{product.brand}</p>
+        )}
+        
         <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
           {product.name}
         </h3>
@@ -96,16 +98,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* Add to Cart */}
-        <Button
-          variant="primary"
-          size="md"
-          fullWidth
-          onClick={() => onAddToCart?.(product.id)}
-          disabled={product.inStock === false}
-        >
-          {product.inStock === false ? 'Agotado' : 'Añadir al carrito'}
-        </Button>
+        {/* Buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            size="md"
+            fullWidth
+            onClick={() => onAddToCart?.(product.id)}
+            disabled={product.inStock === false}
+          >
+            {product.inStock === false ? 'Agotado' : 'Añadir'}
+          </Button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(product.id);
+            }}
+            className={`px-3 py-2 border-2 rounded-lg transition-colors ${
+              isLiked 
+                ? 'border-red-500 bg-red-50 text-red-500' 
+                : 'border-gray-300 text-gray-600 hover:border-red-500 hover:bg-red-50 hover:text-red-500'
+            }`}
+            title={isLiked ? "Quitar de favoritos" : "Añadir a favoritos"}
+          >
+            <svg className="w-5 h-5" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

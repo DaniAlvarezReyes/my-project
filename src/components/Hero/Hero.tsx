@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { Button } from '../Button';
 
 export interface HeroProps {
@@ -65,7 +66,18 @@ export const Hero: React.FC<HeroProps> = ({
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            {ctaText && (
+            {ctaText && ctaHref && (
+              <Link href={ctaHref}>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={onCtaClick}
+                >
+                  {ctaText}
+                </Button>
+              </Link>
+            )}
+            {ctaText && !ctaHref && (
               <Button
                 variant="primary"
                 size="lg"
@@ -74,7 +86,18 @@ export const Hero: React.FC<HeroProps> = ({
                 {ctaText}
               </Button>
             )}
-            {secondaryCtaText && (
+            {secondaryCtaText && secondaryCtaHref && (
+              <Link href={secondaryCtaHref}>
+                <Button
+                  variant={backgroundImage ? 'outline' : 'secondary'}
+                  size="lg"
+                  onClick={onSecondaryCtaClick}
+                >
+                  {secondaryCtaText}
+                </Button>
+              </Link>
+            )}
+            {secondaryCtaText && !secondaryCtaHref && (
               <Button
                 variant={backgroundImage ? 'outline' : 'secondary'}
                 size="lg"
