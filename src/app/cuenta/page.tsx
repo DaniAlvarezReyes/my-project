@@ -7,9 +7,13 @@ import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import LoyaltyCard from '@/components/LoyaltyPoints';
+import AccountSidebar from '@/components/AccountSidebar';
 
 export default function CuentaPage() {
-  const { user, isAuthenticated, updateProfile } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, updateProfile } = useAuth();
+  const toast = useToast();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -25,6 +29,7 @@ export default function CuentaPage() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       router.push('/auth/login');
     } else if (user) {
@@ -40,7 +45,7 @@ export default function CuentaPage() {
         country: user.address?.country || 'España',
       });
     }
-  }, [isAuthenticated, user, router]);
+  }, [authLoading, isAuthenticated, user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -65,8 +70,19 @@ export default function CuentaPage() {
       },
     });
     setEditing(false);
-    alert('Perfil actualizado correctamente');
+    toast.success('Perfil actualizado correctamente');
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <MainNav />
+        <div className="flex items-center justify-center py-24">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return null;
@@ -80,35 +96,7 @@ export default function CuentaPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Mi Cuenta</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar de navegación */}
-          <aside className="lg:col-span-1">
-            <nav className="bg-white rounded-lg shadow-md p-4 space-y-2">
-              <Link
-                href="/cuenta"
-                className="block px-4 py-2 rounded-lg bg-blue-50 text-blue-600 font-medium"
-              >
-                Mi Perfil
-              </Link>
-              <Link
-                href="/cuenta/pedidos"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Mis Pedidos
-              </Link>
-              <Link
-                href="/cuenta/direcciones"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Direcciones
-              </Link>
-              <Link
-                href="/cuenta/favoritos"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Favoritos
-              </Link>
-            </nav>
-          </aside>
+          <AccountSidebar />
 
           {/* Contenido principal */}
           <div className="lg:col-span-3">
@@ -255,12 +243,7 @@ export default function CuentaPage() {
         </div>
       </div>
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza"
-        sections={[]}
-        socialLinks={[]}
-      />
+      <Footer />
     </div>
   );
 }

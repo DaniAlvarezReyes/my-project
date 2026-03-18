@@ -55,6 +55,7 @@ export interface Subcategory {
 
 // Tipos de Carrito
 export interface CartItem {
+  id: string;
   product: Product;
   quantity: number;
   selectedSize?: string;

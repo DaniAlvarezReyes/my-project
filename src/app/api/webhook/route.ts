@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
 });
+
+// Use service role key for webhook (server-side, bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -14,120 +20,91 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('stripe-signature');
 
     if (!signature) {
-      return NextResponse.json(
-        { error: 'No signature found' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No signature' }, { status: 400 });
     }
 
     let event: Stripe.Event;
-
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err: any) {
-      console.error('Webhook signature verification failed:', err.message);
-      return NextResponse.json(
-        { error: `Webhook Error: ${err.message}` },
-        { status: 400 }
-      );
+      console.error('Webhook signature failed:', err.message);
+      return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
     }
 
-    // Manejar el evento
     switch (event.type) {
-      case 'checkout.session.completed':
+      case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        await handleCheckoutCompleted(session);
+        await handlePaymentSuccess(session);
         break;
-
-      case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        console.log('PaymentIntent succeeded:', paymentIntent.id);
+      }
+      case 'payment_intent.payment_failed': {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        await handlePaymentFailed(pi);
         break;
-
-      case 'payment_intent.payment_failed':
-        const failedPayment = event.data.object as Stripe.PaymentIntent;
-        console.error('Payment failed:', failedPayment.id);
-        break;
-
+      }
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.log(`Unhandled event: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
   } catch (error: any) {
     console.error('Webhook error:', error);
-    return NextResponse.json(
-      { error: 'Webhook handler failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
   }
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
+  const orderId = session.metadata?.orderId;
+
+  if (!orderId) {
+    console.error('No orderId in session metadata');
+    return;
+  }
+
   try {
-    const userId = session.metadata?.userId;
-    const items = session.payment_intent
-      ? JSON.parse(
-          (
-            await stripe.paymentIntents.retrieve(
-              session.payment_intent as string
-            )
-          ).metadata.items || '[]'
-        )
-      : [];
-
-    if (!userId) {
-      console.error('No userId in session metadata');
-      return;
-    }
-
-    // Obtener la dirección de envío (si está disponible)
-    const shippingAddress = session.shipping_details?.address || session.customer_details?.address;
-
-    // Crear el pedido en Supabase
-    const { data: order, error: orderError } = await supabase
+    // Update the EXISTING order to processing
+    const { error } = await supabaseAdmin
       .from('orders')
-      .insert({
-        user_id: userId,
+      .update({
         status: 'processing',
-        subtotal: parseFloat(session.metadata?.subtotal || '0'),
-        shipping: parseFloat(session.metadata?.shipping || '0'),
-        tax: parseFloat(session.metadata?.tax || '0'),
-        total: parseFloat(session.metadata?.total || '0'),
-        payment_method: 'card',
         payment_intent_id: session.payment_intent as string,
-        shipping_address: shippingAddress || {},
+        updated_at: new Date().toISOString(),
       })
-      .select()
-      .single();
+      .eq('id', orderId);
 
-    if (orderError) {
-      console.error('Error creating order:', orderError);
+    if (error) {
+      console.error('Error updating order:', error);
       return;
     }
 
-    // Crear los items del pedido
-    if (items.length > 0 && order) {
-      const orderItems = items.map((item: any) => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price: item.price,
-        selected_size: item.size || null,
-        selected_color: item.color || null,
-      }));
+    // Simulate email notification (log for now)
+    console.log('📧 [EMAIL SIMULATION] Confirmación de pedido');
+    console.log(`   Para: ${session.customer_details?.email}`);
+    console.log(`   Pedido: ${orderId}`);
+    console.log(`   Total: €${(session.amount_total || 0) / 100}`);
+    console.log('   → En producción: Enviar email con Resend/SendGrid');
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
+    console.log(`✅ Order ${orderId} updated to processing`);
+  } catch (err) {
+    console.error('handlePaymentSuccess error:', err);
+  }
+}
 
-      if (itemsError) {
-        console.error('Error creating order items:', itemsError);
-      }
-    }
+async function handlePaymentFailed(pi: Stripe.PaymentIntent) {
+  const orderId = pi.metadata?.orderId;
+  if (!orderId) return;
 
-    console.log('Order created successfully:', order.id);
-  } catch (error) {
-    console.error('Error in handleCheckoutCompleted:', error);
+  try {
+    await supabaseAdmin
+      .from('orders')
+      .update({
+        status: 'cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+
+    console.log(`❌ Order ${orderId} marked as cancelled (payment failed)`);
+  } catch (err) {
+    console.error('handlePaymentFailed error:', err);
   }
 }

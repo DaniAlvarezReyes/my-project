@@ -110,12 +110,7 @@ export default function CategoriasPage() {
         </div>
       </div>
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza"
-        sections={[]}
-        socialLinks={[]}
-      />
+      <Footer />
     </div>
   );
 }

@@ -1,28 +1,86 @@
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/auth/login?redirect=/admin');
-    }
-    // Aquí podrías verificar si el usuario es admin
-  }, [isAuthenticated, router]);
+    // FIX: Esperar a que AuthContext termine de cargar en vez de un setTimeout arbitrario
+    if (isLoading) return; // Aún cargando, no hacer nada todavía
 
-  if (!isAuthenticated) return null;
+    const checkAdmin = async () => {
+      if (!isAuthenticated || !user) {
+        console.log('No autenticado, redirigiendo...');
+        router.push('/auth/login?redirect=/admin');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        console.log('Admin check:', { 
+          userId: user.id, 
+          email: user.email, 
+          role: data?.role,
+          error: error?.message 
+        });
+
+        if (data?.role === 'admin') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+          // Redirect handled below
+          router.push('/');
+        }
+      } catch (err) {
+        console.error('Error checking admin:', err);
+        setIsAdmin(false);
+        router.push('/');
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkAdmin();
+  }, [isLoading, isAuthenticated, user?.id]);
+
+  if (isLoading || checking || isAdmin === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Verificando permisos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
 
   const navigation = [
     { name: 'Dashboard', href: '/admin', icon: '📊' },
     { name: 'Productos', href: '/admin/productos', icon: '📦' },
     { name: 'Pedidos', href: '/admin/pedidos', icon: '🛒' },
     { name: 'Usuarios', href: '/admin/usuarios', icon: '👥' },
+    { name: 'Reseñas', href: '/admin/resenas', icon: '⭐' },
+    { name: 'Devoluciones', href: '/admin/devoluciones', icon: '↩️' },
+    { name: 'Cupones', href: '/admin/cupones', icon: '🎟️' },
+    { name: 'Newsletter', href: '/admin/newsletter', icon: '📧' },
+    { name: 'Notificaciones', href: '/admin/notificaciones', icon: '🔔' },
   ];
 
   const isActive = (href: string) => pathname === href;
@@ -38,6 +96,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 A
               </div>
               <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">
+                ADMIN
+              </span>
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/" className="text-gray-600 hover:text-gray-900">

@@ -1,4 +1,5 @@
 'use client';
+import AccountSidebar from '@/components/AccountSidebar';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -6,31 +7,45 @@ import { MainNav } from '@/components/MainNav';
 import { Footer } from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { OrderCardSkeleton } from '@/components/Skeletons';
 
 export default function PedidosPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       router.push('/auth/login');
       return;
     }
-    loadOrders();
-  }, [isAuthenticated, router, user]);
+    if (user?.id) {
+      loadOrders();
+    } else {
+      setLoading(false);
+    }
+  }, [authLoading, isAuthenticated, user?.id]);
 
   const loadOrders = async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    if (data) setOrders(data);
-    setLoading(false);
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) console.error('Error loading orders:', error.message);
+      if (data) setOrders(data);
+    } catch (err) {
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isAuthenticated) {
@@ -49,41 +64,13 @@ export default function PedidosPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
-          <aside className="lg:col-span-1">
-            <nav className="bg-white rounded-lg shadow-md p-4 space-y-2">
-              <Link
-                href="/cuenta"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Mi Perfil
-              </Link>
-              <Link
-                href="/cuenta/pedidos"
-                className="block px-4 py-2 rounded-lg bg-blue-50 text-blue-600 font-medium"
-              >
-                Mis Pedidos
-              </Link>
-              <Link
-                href="/cuenta/direcciones"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Direcciones
-              </Link>
-              <Link
-                href="/cuenta/favoritos"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Favoritos
-              </Link>
-            </nav>
-          </aside>
+          <AccountSidebar />
 
           {/* Lista de pedidos */}
           <div className="lg:col-span-3">
             {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Cargando pedidos...</p>
+              <div className="space-y-4">
+                {[1,2,3].map(i => <OrderCardSkeleton key={i} />)}
               </div>
             ) : orders.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-12 text-center">
@@ -126,6 +113,11 @@ export default function PedidosPage() {
                     </div>
                     <div className="border-t pt-4">
                       <p className="text-2xl font-bold text-gray-900">€{order.total.toFixed(2)}</p>
+                      <Link href={`/cuenta/pedidos/${order.id}`} className="mt-3 block">
+                        <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                          Ver Detalles Completos
+                        </button>
+                      </Link>
                     </div>
                   </div>
                 ))}
@@ -135,12 +127,7 @@ export default function PedidosPage() {
         </div>
       </div>
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza"
-        sections={[]}
-        socialLinks={[]}
-      />
+      <Footer />
     </div>
   );
 }

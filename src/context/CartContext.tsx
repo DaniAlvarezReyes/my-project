@@ -1,17 +1,17 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { CartItem, Product, Order } from '@/types';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import type { CartItem, Product } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 interface CartContextType {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
   shipping: number;
-  tax: number;
   total: number;
   addItem: (product: Product, quantity?: number, size?: string, color?: string) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  removeItem: (cartItemId: string) => void;
+  updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
   isInCart: (productId: string) => boolean;
 }
@@ -20,120 +20,95 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const SHIPPING_COST = 5.99;
 const FREE_SHIPPING_THRESHOLD = 50;
-const TAX_RATE = 0.21; // IVA 21%
+
+const makeCartItemId = (productId: string, size?: string, color?: string) => {
+  const s = size?.trim() || '_';
+  const c = color?.trim() || '_';
+  return `${productId}::${s}::${c}`;
+};
+
+const getCartKey = (userId?: string | null) => {
+  if (userId) return `cart_${userId}`;
+  return 'cart_guest';
+};
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+  const prevUserRef = useRef<string | null>(null);
 
-  // Cargar carrito desde localStorage
   useEffect(() => {
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      try {
-        setItems(JSON.parse(savedCart));
-      } catch (error) {
-        console.error('Error loading cart:', error);
-      }
-    }
-  }, []);
+    const currentUserId = user?.id || null;
+    const cartKey = getCartKey(currentUserId);
 
-  // Guardar carrito en localStorage
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items));
-  }, [items]);
-
-  // Calcular subtotal
-  const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-
-  // Calcular envío
-  const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
-
-  // Calcular impuestos
-  const tax = subtotal * TAX_RATE;
-
-  // Calcular total
-  const total = subtotal + shipping + tax;
-
-  // Contar items
-  const itemCount = items.reduce((count, item) => count + item.quantity, 0);
-
-  const addItem = (
-    product: Product,
-    quantity: number = 1,
-    size?: string,
-    color?: string
-  ) => {
-    setItems(prevItems => {
-      const existingItem = prevItems.find(
-        item =>
-          item.product.id === product.id &&
-          item.selectedSize === size &&
-          item.selectedColor === color
-      );
-
-      if (existingItem) {
-        return prevItems.map(item =>
-          item.product.id === product.id &&
-          item.selectedSize === size &&
-          item.selectedColor === color
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      }
-
-      return [
-        ...prevItems,
-        {
-          product,
-          quantity,
-          selectedSize: size,
-          selectedColor: color,
-        },
-      ];
-    });
-  };
-
-  const removeItem = (productId: string) => {
-    setItems(prevItems => prevItems.filter(item => item.product.id !== productId));
-  };
-
-  const updateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeItem(productId);
+    if (prevUserRef.current && !currentUserId) {
+      setItems([]);
+      try { localStorage.removeItem(getCartKey(prevUserRef.current)); } catch {}
+      setHydrated(true);
+      prevUserRef.current = null;
       return;
     }
 
-    setItems(prevItems =>
-      prevItems.map(item =>
-        item.product.id === productId ? { ...item, quantity } : item
-      )
-    );
-  };
+    try {
+      const saved = localStorage.getItem(cartKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setItems(parsed.map((item: any) => ({
+          ...item,
+          id: item.id || makeCartItemId(item.product?.id, item.selectedSize, item.selectedColor),
+        })));
+      } else {
+        setItems([]);
+      }
+    } catch { setItems([]); }
 
-  const clearCart = () => {
+    prevUserRef.current = currentUserId;
+    setHydrated(true);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(getCartKey(user?.id), JSON.stringify(items));
+  }, [items, hydrated, user?.id]);
+
+  useEffect(() => { try { localStorage.removeItem('cart'); } catch {} }, []);
+
+  // Prices already include IVA — no tax calculation needed
+  const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : (subtotal > 0 ? SHIPPING_COST : 0);
+  const total = subtotal + shipping;
+  const itemCount = items.reduce((count, item) => count + item.quantity, 0);
+
+  const addItem = useCallback((product: Product, quantity: number = 1, size?: string, color?: string) => {
+    const normalizedSize = size?.trim() || undefined;
+    const normalizedColor = color?.trim() || undefined;
+    const cartItemId = makeCartItemId(product.id, normalizedSize, normalizedColor);
+    setItems(prev => {
+      const existing = prev.find(item => item.id === cartItemId);
+      if (existing) return prev.map(item => item.id === cartItemId ? { ...item, quantity: item.quantity + quantity } : item);
+      return [...prev, { id: cartItemId, product, quantity, selectedSize: normalizedSize, selectedColor: normalizedColor }];
+    });
+  }, []);
+
+  const removeItem = useCallback((cartItemId: string) => {
+    setItems(prev => prev.filter(item => item.id !== cartItemId));
+  }, []);
+
+  const updateQuantity = useCallback((cartItemId: string, quantity: number) => {
+    if (quantity <= 0) { removeItem(cartItemId); return; }
+    setItems(prev => prev.map(item => item.id === cartItemId ? { ...item, quantity } : item));
+  }, [removeItem]);
+
+  const clearCart = useCallback(() => {
     setItems([]);
-  };
+    try { localStorage.removeItem(getCartKey(user?.id)); } catch {}
+  }, [user?.id]);
 
-  const isInCart = (productId: string): boolean => {
-    return items.some(item => item.product.id === productId);
-  };
+  const isInCart = useCallback((productId: string) => items.some(item => item.product.id === productId), [items]);
 
   return (
-    <CartContext.Provider
-      value={{
-        items,
-        itemCount,
-        subtotal,
-        shipping,
-        tax,
-        total,
-        addItem,
-        removeItem,
-        updateQuantity,
-        clearCart,
-        isInCart,
-      }}
-    >
+    <CartContext.Provider value={{ items, itemCount, subtotal, shipping, total, addItem, removeItem, updateQuantity, clearCart, isInCart }}>
       {children}
     </CartContext.Provider>
   );
@@ -141,8 +116,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export const useCart = () => {
   const context = useContext(CartContext);
-  if (!context) {
-    throw new Error('useCart debe usarse dentro de CartProvider');
-  }
+  if (!context) throw new Error('useCart debe usarse dentro de CartProvider');
   return context;
 };

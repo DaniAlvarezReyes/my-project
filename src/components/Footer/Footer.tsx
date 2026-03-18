@@ -56,9 +56,9 @@ const socialIcons = {
 };
 
 export const Footer: React.FC<FooterProps> = ({
-  siteName = 'My Store',
-  description,
-  sections = [],
+  siteName = 'Sneakers Pro',
+  description = 'Tu tienda de zapatillas online de confianza. Envío gratis en pedidos +50€.',
+  sections,
   socialLinks = [],
   copyrightText,
   theme = {},
@@ -66,6 +66,36 @@ export const Footer: React.FC<FooterProps> = ({
   const bgColor = theme.backgroundColor || 'bg-gray-900';
   const textColor = theme.textColor || 'text-gray-300';
   const currentYear = new Date().getFullYear();
+
+  const defaultSections: FooterSection[] = sections ?? [
+    {
+      title: 'Tienda',
+      links: [
+        { label: 'Productos', href: '/productos' },
+        { label: 'Categorías', href: '/categorias' },
+        { label: 'Ofertas', href: '/productos?filter=ofertas' },
+        { label: 'Novedades', href: '/productos?filter=nuevos' },
+      ],
+    },
+    {
+      title: 'Cuenta',
+      links: [
+        { label: 'Mi Perfil', href: '/cuenta' },
+        { label: 'Mis Pedidos', href: '/cuenta/pedidos' },
+        { label: 'Favoritos', href: '/cuenta/favoritos' },
+        { label: 'Devoluciones', href: '/cuenta/devoluciones' },
+      ],
+    },
+    {
+      title: 'Legal',
+      links: [
+        { label: 'Términos y Condiciones', href: '/legal/terminos' },
+        { label: 'Política de Privacidad', href: '/legal/privacidad' },
+        { label: 'Política de Cookies', href: '/legal/cookies' },
+        { label: 'Envíos', href: '/legal/envios' },
+      ],
+    },
+  ];
 
   return (
     <footer className={`${bgColor} ${textColor}`}>
@@ -97,7 +127,7 @@ export const Footer: React.FC<FooterProps> = ({
           </div>
 
           {/* Link Sections */}
-          {sections.map((section, index) => (
+          {defaultSections.map((section, index) => (
             <div key={index}>
               <h4 className="text-white font-semibold mb-4">{section.title}</h4>
               <ul className="space-y-2">

@@ -4,6 +4,7 @@ import { MainNav } from '@/components/MainNav';
 import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
+import { supabase } from '@/lib/supabase';
 
 export default function ContactoPage() {
   const [formData, setFormData] = useState({
@@ -14,6 +15,8 @@ export default function ContactoPage() {
     message: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -22,11 +25,29 @@ export default function ContactoPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Formulario enviado:', formData);
-    setSubmitted(true);
-    // Aquí conectarías con tu backend o servicio de email
+    setLoading(true);
+    setError('');
+    try {
+      const { error: dbError } = await supabase
+        .from('contact_messages')
+        .insert({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone || null,
+          subject: formData.subject,
+          message: formData.message,
+        });
+      if (dbError) throw dbError;
+      setSubmitted(true);
+      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+    } catch (err: any) {
+      console.error('Error sending contact form:', err);
+      setError('Error al enviar el mensaje. Por favor, inténtalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -169,8 +190,12 @@ export default function ContactoPage() {
                     />
                   </div>
 
-                  <Button type="submit" variant="primary" size="lg" fullWidth>
-                    Enviar Mensaje
+                  {error && (
+                    <div className="mb-4 bg-red-50 text-red-600 p-3 rounded-lg text-sm">{error}</div>
+                  )}
+
+                  <Button type="submit" variant="primary" size="lg" fullWidth disabled={loading}>
+                    {loading ? 'Enviando...' : 'Enviar Mensaje'}
                   </Button>
                 </form>
               )}
@@ -179,12 +204,7 @@ export default function ContactoPage() {
         </div>
       </div>
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza"
-        sections={[]}
-        socialLinks={[]}
-      />
+      <Footer />
     </div>
   );
 }

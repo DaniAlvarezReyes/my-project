@@ -6,27 +6,21 @@ import { MainNav } from '@/components/MainNav';
 import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { useCart } from '@/context/CartContext';
-import { useAuth } from '@/context/AuthContext';
 
 export default function CarritoPage() {
   const {
     items,
     subtotal,
     shipping,
-    tax,
     total,
     updateQuantity,
     removeItem,
   } = useCart();
-  const { isAuthenticated } = useAuth();
+  
   const router = useRouter();
 
   const handleCheckout = () => {
-    if (!isAuthenticated) {
-      router.push('/auth/login?redirect=/checkout');
-    } else {
-      router.push('/checkout');
-    }
+    router.push('/checkout');
   };
 
   return (
@@ -88,7 +82,7 @@ export default function CarritoPage() {
             <div className="lg:col-span-2 space-y-4">
               {items.map((item) => (
                 <div
-                  key={`${item.product.id}-${item.selectedSize}-${item.selectedColor}`}
+                  key={item.id}
                   className="bg-white rounded-lg shadow-md p-6 flex gap-6"
                 >
                   {/* Imagen */}
@@ -127,9 +121,9 @@ export default function CarritoPage() {
                         <p className="text-2xl font-bold text-gray-900">
                           €{item.product.price.toFixed(2)}
                         </p>
-                        {item.product.originalPrice && (
+                        {(item.product.originalPrice || item.product.original_price) && (
                           <p className="text-sm text-gray-500 line-through">
-                            €{item.product.originalPrice.toFixed(2)}
+                            €{(item.product.originalPrice || item.product.original_price).toFixed(2)}
                           </p>
                         )}
                       </div>
@@ -139,7 +133,7 @@ export default function CarritoPage() {
                     <div className="flex justify-between items-center mt-4">
                       <div className="flex items-center border border-gray-300 rounded-lg">
                         <button
-                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
                           className="px-3 py-1 hover:bg-gray-100"
                         >
                           -
@@ -148,7 +142,7 @@ export default function CarritoPage() {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
                           className="px-3 py-1 hover:bg-gray-100"
                           disabled={item.quantity >= item.product.stock}
                         >
@@ -157,7 +151,7 @@ export default function CarritoPage() {
                       </div>
 
                       <button
-                        onClick={() => removeItem(item.product.id)}
+                        onClick={() => removeItem(item.id)}
                         className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,9 +202,8 @@ export default function CarritoPage() {
                     </div>
                   )}
 
-                  <div className="flex justify-between text-gray-600">
-                    <span>IVA (21%)</span>
-                    <span className="font-medium">€{tax.toFixed(2)}</span>
+                  <div className="flex justify-between text-gray-500 text-xs">
+                    <span>IVA incluido</span>
                   </div>
 
                   <div className="border-t border-gray-200 pt-3 mt-3">
@@ -266,12 +259,7 @@ export default function CarritoPage() {
         )}
       </div>
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza para zapatillas de calidad."
-        sections={[]}
-        socialLinks={[]}
-      />
+      <Footer />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import AccountSidebar from '@/components/AccountSidebar';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -7,6 +8,8 @@ import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 
 interface Address {
@@ -20,7 +23,9 @@ interface Address {
 }
 
 export default function DireccionesPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const router = useRouter();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,27 +40,33 @@ export default function DireccionesPage() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       router.push('/auth/login');
       return;
     }
-    loadAddresses();
-  }, [isAuthenticated, router]);
+    if (user?.id) {
+      loadAddresses();
+    } else {
+      setLoading(false);
+    }
+  }, [authLoading, isAuthenticated, user?.id]);
 
   const loadAddresses = async () => {
     if (!user?.id) return;
-
     setLoading(true);
-    const { data, error } = await supabase
-      .from('addresses')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('is_default', { ascending: false });
-
-    if (!error && data) {
-      setAddresses(data);
+    try {
+      const { data, error } = await supabase
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false });
+      if (!error && data) setAddresses(data);
+    } catch (err) {
+      console.warn('Error loading addresses:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -68,72 +79,49 @@ export default function DireccionesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!user?.id) return;
 
-    // Si la nueva dirección es predeterminada, quitar predeterminado de las demás
-    if (formData.is_default) {
-      await supabase
+    try {
+      if (formData.is_default) {
+        await supabase.from('addresses').update({ is_default: false }).eq('user_id', user.id);
+      }
+
+      const { error } = await supabase
         .from('addresses')
-        .update({ is_default: false })
-        .eq('user_id', user.id);
-    }
+        .insert({ user_id: user.id, ...formData });
 
-    const { error } = await supabase
-      .from('addresses')
-      .insert({
-        user_id: user.id,
-        ...formData,
-      });
-
-    if (!error) {
-      setShowModal(false);
-      setFormData({
-        street: '',
-        city: '',
-        state: '',
-        postal_code: '',
-        country: 'España',
-        is_default: false,
-      });
-      loadAddresses();
-    } else {
-      alert('Error al guardar la dirección');
+      if (!error) {
+        setShowModal(false);
+        setFormData({ street: '', city: '', state: '', postal_code: '', country: 'España', is_default: false });
+        loadAddresses();
+      } else {
+        toast.error('Error al guardar la dirección');
+      }
+    } catch (err) {
+      toast.error('Error al guardar la dirección');
     }
   };
 
   const setAsDefault = async (addressId: string) => {
     if (!user?.id) return;
-
-    // Quitar predeterminado de todas
-    await supabase
-      .from('addresses')
-      .update({ is_default: false })
-      .eq('user_id', user.id);
-
-    // Establecer como predeterminada
-    const { error } = await supabase
-      .from('addresses')
-      .update({ is_default: true })
-      .eq('id', addressId);
-
-    if (!error) {
-      loadAddresses();
+    try {
+      await supabase.from('addresses').update({ is_default: false }).eq('user_id', user.id);
+      const { error } = await supabase.from('addresses').update({ is_default: true }).eq('id', addressId);
+      if (!error) loadAddresses();
+    } catch (err) {
+      console.warn('Error setting default:', err);
     }
   };
 
   const deleteAddress = async (addressId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta dirección?')) {
-      return;
-    }
+    const ok = await confirm({ title: 'Eliminar dirección', message: '¿Eliminar esta dirección?', confirmText: 'Eliminar', variant: 'danger' });
+    if (!ok) return;
 
-    const { error } = await supabase
-      .from('addresses')
-      .delete()
-      .eq('id', addressId);
-
-    if (!error) {
-      loadAddresses();
+    try {
+      const { error } = await supabase.from('addresses').delete().eq('id', addressId);
+      if (!error) loadAddresses();
+    } catch (err) {
+      console.warn('Error deleting address:', err);
     }
   };
 
@@ -150,34 +138,7 @@ export default function DireccionesPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
-          <aside className="lg:col-span-1">
-            <nav className="bg-white rounded-lg shadow-md p-4 space-y-2">
-              <Link
-                href="/cuenta"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Mi Perfil
-              </Link>
-              <Link
-                href="/cuenta/pedidos"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Mis Pedidos
-              </Link>
-              <Link
-                href="/cuenta/favoritos"
-                className="block px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-              >
-                Favoritos
-              </Link>
-              <Link
-                href="/cuenta/direcciones"
-                className="block px-4 py-2 rounded-lg bg-blue-50 text-blue-600 font-medium"
-              >
-                Direcciones
-              </Link>
-            </nav>
-          </aside>
+          <AccountSidebar />
 
           {/* Contenido principal */}
           <div className="lg:col-span-3">
@@ -352,12 +313,7 @@ export default function DireccionesPage() {
         </div>
       )}
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza"
-        sections={[]}
-        socialLinks={[]}
-      />
+      <Footer />
     </div>
   );
 }

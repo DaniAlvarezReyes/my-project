@@ -1,44 +1,73 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MainNav } from '@/components/MainNav';
-import { Hero } from '@/components/Hero';
+import { ImageCarousel } from '@/components/ImageCarousel';
 import { ProductCard } from '@/components/ProductCard';
 import { Footer } from '@/components/Footer';
 import Link from 'next/link';
-import { useCart } from '@/context/CartContext';
-import { getFeaturedProducts, getOnSaleProducts } from '@/data/products';
+
 import { categories } from '@/data/categories';
+import { supabase } from '@/lib/supabase';
+import RecentlyViewed from '@/components/RecentlyViewed';
+import AdBanner, { AdPlacements } from '@/components/AdBanner';
 
 export default function Home() {
   const router = useRouter();
-  const { addItem } = useCart();
-  const featuredProducts = getFeaturedProducts();
-  const onSaleProducts = getOnSaleProducts();
+  const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [onSaleProducts, setOnSaleProducts] = useState<any[]>([]);
 
-  const handleAddToCart = (product: any) => {
-    addItem(product);
-    alert(`${product.name} añadido al carrito!`);
-  };
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const { data } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (data) {
+          setFeaturedProducts(data.slice(0, 8));
+          setOnSaleProducts(data.filter(p => p.original_price && p.original_price > p.price).slice(0, 8));
+        }
+      } catch {}
+    };
+    loadProducts();
+  }, []);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
-  const handleViewDetails = (productId: string) => {
-    router.push(`/productos/${productId}`);
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) return;
+    setNewsletterStatus('loading');
+    try {
+      const { error } = await supabase
+        .from('newsletter_subscribers')
+        .insert({ email: newsletterEmail.trim().toLowerCase() });
+      if (error) {
+        if (error.code === '23505') {
+          setNewsletterStatus('success'); // Ya estaba suscrito, no mostramos error
+        } else {
+          throw error;
+        }
+      } else {
+        setNewsletterStatus('success');
+      }
+      setNewsletterEmail('');
+    } catch (err) {
+      console.error('Newsletter error:', err);
+      setNewsletterStatus('error');
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <MainNav />
 
-      <Hero
-        title="Las mejores zapatillas del mercado"
-        subtitle="Nueva colección 2026"
-        description="Descubre las últimas tendencias en calzado deportivo y casual. Envío gratis en pedidos superiores a 50€."
-        ctaText="Ver Colección"
-        ctaHref="/productos"
-        secondaryCtaText="Ver Ofertas"
-        secondaryCtaHref="/productos?filter=ofertas"
-      />
+      {/* Carrusel de imágenes */}
+      <div className="w-full">
+        <ImageCarousel />
+      </div>
 
       {/* Categories Section */}
       <section className="py-16 bg-white">
@@ -52,7 +81,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 stagger-children">
             {categories.map((category) => (
               <Link
                 key={category.id}
@@ -95,19 +124,21 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 stagger-children">
             {featuredProducts.map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
-                onAddToCart={() => handleAddToCart(product)}
-                onViewDetails={handleViewDetails}
-                currency="€"
               />
             ))}
           </div>
         </div>
       </section>
+
+      {/* Ad slot */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <AdBanner slot={AdPlacements.HOME_PRODUCTS_BETWEEN} format="leaderboard" />
+      </div>
 
       {/* On Sale Products */}
       {onSaleProducts.length > 0 && (
@@ -125,14 +156,11 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 stagger-children">
               {onSaleProducts.slice(0, 4).map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
-                  onAddToCart={() => handleAddToCart(product)}
-                  onViewDetails={handleViewDetails}
-                  currency="€"
                 />
               ))}
             </div>
@@ -175,6 +203,13 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Recently Viewed */}
+      <section className="py-4 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <RecentlyViewed />
+        </div>
+      </section>
+
       {/* Newsletter */}
       <section className="py-16 bg-blue-600 text-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -182,59 +217,34 @@ export default function Home() {
           <p className="text-blue-100 mb-8">
             Recibe las últimas novedades y ofertas exclusivas directamente en tu email
           </p>
-          <form className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+          <form onSubmit={handleNewsletterSubmit} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
             <input
               type="email"
               placeholder="tu@email.com"
+              value={newsletterEmail}
+              onChange={(e) => setNewsletterEmail(e.target.value)}
+              required
               className="flex-1 px-4 py-3 rounded-lg text-gray-900"
+              disabled={newsletterStatus === 'loading'}
             />
             <button
               type="submit"
-              className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 whitespace-nowrap"
+              disabled={newsletterStatus === 'loading'}
+              className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 whitespace-nowrap disabled:opacity-50"
             >
-              Suscribir
+              {newsletterStatus === 'loading' ? 'Enviando...' : 'Suscribir'}
             </button>
           </form>
+          {newsletterStatus === 'success' && (
+            <p className="mt-3 text-blue-100 text-sm">¡Te has suscrito correctamente!</p>
+          )}
+          {newsletterStatus === 'error' && (
+            <p className="mt-3 text-red-200 text-sm">Error al suscribirse. Inténtalo de nuevo.</p>
+          )}
         </div>
       </section>
 
-      <Footer
-        siteName="Sneakers Pro"
-        description="Tu tienda de confianza para zapatillas de calidad. Envíos a toda España."
-        sections={[
-          {
-            title: 'Comprar',
-            links: [
-              { label: 'Todos los productos', href: '/productos' },
-              { label: 'Categorías', href: '/categorias' },
-              { label: 'Novedades', href: '/productos?filter=nuevos' },
-              { label: 'Ofertas', href: '/productos?filter=ofertas' },
-            ],
-          },
-          {
-            title: 'Ayuda',
-            links: [
-              { label: 'FAQ', href: '/faq' },
-              { label: 'Envíos', href: '/legal/envios' },
-              { label: 'Devoluciones', href: '/legal/devoluciones' },
-              { label: 'Contacto', href: '/contacto' },
-            ],
-          },
-          {
-            title: 'Legal',
-            links: [
-              { label: 'Privacidad', href: '/legal/privacidad' },
-              { label: 'Términos', href: '/legal/terminos' },
-              { label: 'Cookies', href: '/legal/cookies' },
-            ],
-          },
-        ]}
-        socialLinks={[
-          { platform: 'instagram', url: 'https://instagram.com/sneakerspro' },
-          { platform: 'facebook', url: 'https://facebook.com/sneakerspro' },
-        ]}
-        copyrightText="© 2026 Sneakers Pro. Todos los derechos reservados."
-      />
+      <Footer />
     </div>
   );
 }

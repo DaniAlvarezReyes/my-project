@@ -1,7 +1,9 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
+
+const GUEST_FAV_KEY = 'guest_favorites';
 
 interface FavoritesContextType {
   favorites: string[];
@@ -22,61 +24,70 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { user, isAuthenticated } = useAuth();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const prevUserRef = useRef<string | null>(null);
 
-  // Cargar favoritos
   useEffect(() => {
-    const loadFavorites = async () => {
+    const load = async () => {
       if (isAuthenticated && user?.id) {
-        const { data } = await supabase
-          .from('favorites')
-          .select('product_id')
-          .eq('user_id', user.id);
-        
-        if (data) {
-          setFavorites(data.map(f => f.product_id));
+        try {
+          const { data } = await supabase
+            .from('favorites')
+            .select('product_id')
+            .eq('user_id', user.id);
+          const dbFavs = data ? data.map(f => f.product_id) : [];
+
+          // Merge guest favorites on login
+          if (!prevUserRef.current) {
+            try {
+              const guestFavs = JSON.parse(localStorage.getItem(GUEST_FAV_KEY) || '[]') as string[];
+              const toMerge = guestFavs.filter(id => !dbFavs.includes(id));
+              if (toMerge.length > 0) {
+                await supabase.from('favorites').insert(
+                  toMerge.map(product_id => ({ user_id: user.id, product_id }))
+                );
+                dbFavs.push(...toMerge);
+              }
+              localStorage.removeItem(GUEST_FAV_KEY);
+            } catch {}
+          }
+
+          setFavorites(dbFavs);
+        } catch {
+          setFavorites([]);
         }
       } else {
-        // Si no está logueado, usar localStorage
-        const saved = localStorage.getItem('favorites');
-        if (saved) setFavorites(JSON.parse(saved));
+        // Guest: load from localStorage
+        try {
+          setFavorites(JSON.parse(localStorage.getItem(GUEST_FAV_KEY) || '[]'));
+        } catch {
+          setFavorites([]);
+        }
       }
+      prevUserRef.current = user?.id || null;
       setLoading(false);
     };
-
-    loadFavorites();
-  }, [user, isAuthenticated]);
+    load();
+  }, [user?.id, isAuthenticated]);
 
   const toggleFavorite = useCallback(async (productId: string) => {
     const isFav = favorites.includes(productId);
+    const newFavs = isFav ? favorites.filter(id => id !== productId) : [...favorites, productId];
+    setFavorites(newFavs);
 
     if (isAuthenticated && user?.id) {
-      // Guardar en Supabase
-      if (isFav) {
-        await supabase
-          .from('favorites')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('product_id', productId);
-        setFavorites(prev => prev.filter(id => id !== productId));
-      } else {
-        await supabase
-          .from('favorites')
-          .insert({ user_id: user.id, product_id: productId });
-        setFavorites(prev => [...prev, productId]);
-      }
+      try {
+        if (isFav) {
+          await supabase.from('favorites').delete().eq('user_id', user.id).eq('product_id', productId);
+        } else {
+          await supabase.from('favorites').insert({ user_id: user.id, product_id: productId });
+        }
+      } catch {}
     } else {
-      // Guardar en localStorage
-      const newFavorites = isFav 
-        ? favorites.filter(id => id !== productId)
-        : [...favorites, productId];
-      setFavorites(newFavorites);
-      localStorage.setItem('favorites', JSON.stringify(newFavorites));
+      localStorage.setItem(GUEST_FAV_KEY, JSON.stringify(newFavs));
     }
-  }, [favorites, user, isAuthenticated]);
+  }, [favorites, user?.id, isAuthenticated]);
 
-  const isFavorite = useCallback((productId: string) => {
-    return favorites.includes(productId);
-  }, [favorites]);
+  const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
 
   return (
     <FavoritesContext.Provider value={{ favorites, toggleFavorite, isFavorite, loading }}>
