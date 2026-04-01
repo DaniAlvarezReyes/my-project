@@ -162,21 +162,21 @@ interface StatCardProps {
 }
 
 export const StatCard: React.FC<StatCardProps> = ({ label, value, change, sparkData, icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+  <div className="bg-white border border-neutral-200 rounded-xl p-5 hover:border-neutral-300 transition-colors">
     <div className="flex items-start justify-between mb-3">
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center`} style={{ backgroundColor: `${color}15` }}>
-        <div style={{ color }}>{icon}</div>
+      <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-600">
+        {icon}
       </div>
       {change !== undefined && (
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-          change >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+          change >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
         }`}>
           {change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
         </span>
       )}
     </div>
-    <p className="text-sm text-gray-500 mb-1">{label}</p>
-    <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <p className="text-[11px] text-neutral-400 uppercase tracking-widest font-medium mb-1">{label}</p>
+    <p className="text-2xl font-black text-neutral-900 tracking-tight">{value}</p>
     {sparkData && sparkData.length > 1 && (
       <div className="mt-3">
         <Sparkline data={sparkData} color={color} />

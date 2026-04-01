@@ -12,6 +12,7 @@ import { ProductDetailSkeleton } from '@/components/Skeletons';
 import RecentlyViewed, { addToRecentlyViewed } from '@/components/RecentlyViewed';
 import RelatedProducts from '@/components/RelatedProducts';
 import StockAlert from '@/components/StockAlert';
+import StickyAddToCart from '@/components/StickyAddToCart';
 import AdBanner, { AdPlacements } from '@/components/AdBanner';
 import { useCart } from '@/context/CartContext';
 import { useToast } from '@/context/ToastContext';
@@ -30,6 +31,14 @@ export default function ProductDetailPage() {
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const [showStickyCart, setShowStickyCart] = useState(false);
+
+  // Track scroll to show/hide sticky cart
+  useEffect(() => {
+    const onScroll = () => setShowStickyCart(window.scrollY > 600);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (params.id) loadProduct();
@@ -420,6 +429,7 @@ export default function ProductDetailPage() {
 
       <Footer />
       {showSizeGuide && <SizeGuide onClose={() => setShowSizeGuide(false)} />}
+      {product && <StickyAddToCart product={product} onAddToCart={handleAddToCart} visible={showStickyCart && (product.in_stock !== false)} />}
     </div>
   );
 }

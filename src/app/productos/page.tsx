@@ -50,7 +50,7 @@ function ProductosContent() {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select('*, color_variants:product_color_variants(color_name, color_hex, images)')
         .order('created_at', { ascending: false });
 
       if (error) {

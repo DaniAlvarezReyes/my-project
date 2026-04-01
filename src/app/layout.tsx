@@ -10,6 +10,8 @@ import { ConfirmProvider } from '@/components/ConfirmDialog';
 import CookieBanner from '@/components/CookieBanner';
 import ScrollToTop from '@/components/ScrollToTop';
 import PushNotificationPrompt from '@/components/PushNotificationPrompt';
+import PageTransition from '@/components/PageTransition';
+import AIAssistant from '@/components/AIAssistant';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -46,17 +48,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           />
         )}
       </head>
-      <body className={`${inter.className} bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors`}>
+      <body className={`${inter.className} bg-white dark:bg-black text-neutral-900 dark:text-neutral-100`}>
         <ThemeProvider>
           <AuthProvider>
             <CartProvider>
               <FavoritesProvider>
                 <ToastProvider>
                   <ConfirmProvider>
-                    {children}
+                    <PageTransition>
+                      {children}
+                    </PageTransition>
                     <CookieBanner />
                     <ScrollToTop />
                     <PushNotificationPrompt />
+                    <AIAssistant />
                   </ConfirmProvider>
                 </ToastProvider>
               </FavoritesProvider>

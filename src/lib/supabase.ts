@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
 const isBrowser = typeof window !== 'undefined';
 
 const safeStorage = {
@@ -29,9 +28,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: safeStorage,
     lock: (async (_n: string, _t: number, fn: () => Promise<any>) => fn()),
   } as any,
+  realtime: {
+    params: { eventsPerSecond: 0 },
+  },
   global: {
     fetch: (...args: Parameters<typeof fetch>) => {
-      // Add timeout to all supabase fetch calls to prevent hanging
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
       const [input, init] = args;
@@ -41,29 +42,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Auto-refresh session when user returns to tab after being away
+// Kill any Realtime channels immediately
 if (isBrowser) {
-  let lastActivity = Date.now();
-
-  // Track activity
-  const updateActivity = () => { lastActivity = Date.now(); };
-  document.addEventListener('click', updateActivity, { passive: true });
-  document.addEventListener('keydown', updateActivity, { passive: true });
-
-  document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible') {
-      const inactiveMs = Date.now() - lastActivity;
-      // If inactive for more than 2 minutes, refresh session
-      if (inactiveMs > 120_000) {
-        try {
-          await supabase.auth.getSession();
-        } catch {
-          // Silent fail - will retry on next query
-        }
-      }
-      lastActivity = Date.now();
-    }
-  });
+  supabase.removeAllChannels();
 }
 
 export const handleSupabaseError = (error: any) => {
