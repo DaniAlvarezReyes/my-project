@@ -6,7 +6,7 @@ import { MainNav } from '@/components/MainNav';
 import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { Rating } from '@/components/Rating';
-import { ProductComments } from '@/components/ProductComments';
+import { ReviewSection } from '@/components/ReviewSection';
 import SizeGuide from '@/components/SizeGuide';
 import { ProductDetailSkeleton } from '@/components/Skeletons';
 import RecentlyViewed, { addToRecentlyViewed } from '@/components/RecentlyViewed';
@@ -18,6 +18,8 @@ import { useCart } from '@/context/CartContext';
 import { useToast } from '@/context/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { getProductById } from '@/data/products';
+import PriceAlert from '@/components/PriceAlert';
+import ImageLightbox from '@/components/ImageLightbox';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -32,6 +34,8 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [showStickyCart, setShowStickyCart] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [communityImages, setCommunityImages] = useState<{ url: string; author: string }[]>([]);
 
   // Track scroll to show/hide sticky cart
   useEffect(() => {
@@ -41,8 +45,33 @@ export default function ProductDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (params.id) loadProduct();
+    if (params.id) {
+      loadProduct();
+      loadCommunityImages(params.id as string);
+    }
   }, [params.id]);
+
+  const loadCommunityImages = async (productId: string) => {
+    try {
+      const { data } = await supabase
+        .from('product_comments')
+        .select('images, author_name')
+        .eq('product_id', productId)
+        .not('images', 'is', null)
+        .limit(10);
+      if (data) {
+        const imgs: { url: string; author: string }[] = [];
+        data.forEach((c: any) => {
+          if (Array.isArray(c.images)) {
+            c.images.slice(0, 2).forEach((url: string) => {
+              if (url) imgs.push({ url, author: c.author_name || 'Cliente' });
+            });
+          }
+        });
+        setCommunityImages(imgs.slice(0, 6));
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     setSelectedImage(0);
@@ -181,6 +210,17 @@ export default function ProductDetailPage() {
     );
   }
 
+  const getDeliveryDate = () => {
+    const date = new Date();
+    let businessDays = 0;
+    while (businessDays < 3) {
+      date.setDate(date.getDate() + 1);
+      const day = date.getDay();
+      if (day !== 0 && day !== 6) businessDays++;
+    }
+    return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  };
+
   const handleAddToCart = () => {
     if (sizesToShow.length > 0 && !selectedSize) {
       toast.warning('Por favor selecciona una talla');
@@ -197,8 +237,56 @@ export default function ProductDetailPage() {
   const discount = (product.original_price || product.originalPrice) ?
     Math.round((((product.original_price || product.originalPrice) - product.price) / (product.original_price || product.originalPrice)) * 100) : 0;
 
+  const jsonLd = product ? {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description,
+    brand: { '@type': 'Brand', name: product.brand },
+    image: imagesToShow,
+    sku: product.id,
+    offers: {
+      '@type': 'Offer',
+      url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://sneakerspro.com'}/productos/${product.id}`,
+      priceCurrency: 'EUR',
+      price: product.price,
+      priceValidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      availability: product.in_stock !== false
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+      seller: { '@type': 'Organization', name: 'Sneakers Pro' },
+    },
+    aggregateRating: product.rating && product.reviews ? {
+      '@type': 'AggregateRating',
+      ratingValue: product.rating,
+      reviewCount: product.reviews,
+      bestRating: 5,
+      worstRating: 1,
+    } : undefined,
+  } : null;
+
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Inicio', item: process.env.NEXT_PUBLIC_APP_URL || 'https://sneakerspro.com' },
+      { '@type': 'ListItem', position: 2, name: 'Productos', item: `${process.env.NEXT_PUBLIC_APP_URL || 'https://sneakerspro.com'}/productos` },
+      { '@type': 'ListItem', position: 3, name: product?.name || 'Producto', item: `${process.env.NEXT_PUBLIC_APP_URL || 'https://sneakerspro.com'}/productos/${product?.id}` },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
       <MainNav />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -230,12 +318,15 @@ export default function ProductDetailPage() {
                 </span>
               )}
               
-              <div className="relative aspect-square">
+              <div className="relative aspect-square group cursor-zoom-in" onClick={() => setShowLightbox(true)}>
                 <img
                   src={imagesToShow[selectedImage] || 'https://via.placeholder.com/800'}
                   alt={product.name}
                   className="w-full h-full object-cover"
                 />
+                <div className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                </div>
                 
                 {imagesToShow.length > 1 && (
                   <>
@@ -392,9 +483,26 @@ export default function ProductDetailPage() {
               {product.in_stock === false || (product.stock !== undefined && product.stock <= 0) ? (
                 <StockAlert productId={product.id} productName={product.name} />
               ) : (
-                <Button variant="primary" size="lg" fullWidth onClick={handleAddToCart}>
-                  Añadir al carrito
-                </Button>
+                <>
+                  <Button variant="primary" size="lg" fullWidth onClick={handleAddToCart}>
+                    Añadir al carrito
+                  </Button>
+                  <div className="mt-3 flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                    <span>Recíbelo el <strong>{getDeliveryDate()}</strong> con envío express</span>
+                  </div>
+                </>
+              )}
+
+              {/* Price alert — only show when in stock and has a price */}
+              {product.price > 0 && product.in_stock !== false && (
+                <div className="mt-3">
+                  <PriceAlert
+                    productId={product.id}
+                    productName={product.name}
+                    currentPrice={product.price}
+                  />
+                </div>
               )}
 
               <div className="mt-6 space-y-3 text-sm text-gray-600">
@@ -416,7 +524,7 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="mt-16">
-          <ProductComments productId={product.id} />
+          <ReviewSection productId={product.id} />
         </div>
 
         <div className="my-8">
@@ -424,12 +532,120 @@ export default function ProductDetailPage() {
         </div>
 
         <RelatedProducts currentProductId={product.id} category={product.category} brand={product.brand} />
+
+        {/* ─── UGC SECTION ─── */}
+        <section className="mt-16">
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">Comunidad</p>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Cómo queda en la vida real</h2>
+            </div>
+            <button className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black dark:hover:text-white transition-colors hidden sm:block">
+              Comparte el tuyo →
+            </button>
+          </div>
+          {communityImages.length > 0 ? (
+            <>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {communityImages.map((img, i) => (
+                  <div key={i} className="aspect-square overflow-hidden rounded-xl bg-gray-100 dark:bg-neutral-800 group cursor-pointer relative">
+                    <img
+                      src={img.url}
+                      alt={`Foto de ${img.author}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                    </div>
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-5 h-5 rounded-full bg-white border-2 border-white overflow-hidden flex items-center justify-center">
+                        <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500" />
+                      </div>
+                      <span className="text-[9px] text-white font-bold drop-shadow">{img.author}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-center text-gray-400 mt-4">Fotos reales de nuestra comunidad de clientes verificados</p>
+            </>
+          ) : (
+            <div className="text-center py-12 bg-gray-50 dark:bg-neutral-900 rounded-2xl border border-dashed border-gray-200 dark:border-neutral-700">
+              <svg className="w-10 h-10 mx-auto text-gray-300 dark:text-neutral-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              <p className="text-sm text-gray-400 dark:text-neutral-500">Sé el primero en compartir una foto con este producto</p>
+              <p className="text-xs text-gray-300 dark:text-neutral-600 mt-1">Deja una reseña con foto y aparecerá aquí</p>
+            </div>
+          )}
+        </section>
+
+        {/* ─── COMPLETA EL LOOK ─── */}
+        {product && (
+          <section className="mt-16 mb-8">
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">Cross-sell</p>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Completa el look</h2>
+              </div>
+            </div>
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-neutral-900 dark:to-neutral-800 rounded-2xl p-6 border border-gray-200 dark:border-neutral-700">
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                {/* Main product */}
+                <div className="flex-shrink-0 text-center">
+                  <div className="w-28 h-28 mx-auto bg-white dark:bg-neutral-900 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-700 shadow-sm mb-2">
+                    <img src={imagesToShow[0] || 'https://via.placeholder.com/112'} alt={product.name} className="w-full h-full object-cover" />
+                  </div>
+                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 max-w-[112px] line-clamp-2">{product.name}</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white mt-1">€{product.price.toFixed(2)}</p>
+                </div>
+
+                {/* Curated accessories */}
+                {[
+                  { name: 'Calcetines Premium', price: 12.99, img: 'photo-1571781565036-d3f759be73e4', href: '/productos?categoria=accesorios' },
+                  { name: 'Cordones de colores', price: 8.99, img: 'photo-1542291026-7eec264c27ff', href: '/productos?categoria=accesorios' },
+                ].map((acc, idx) => (
+                  <React.Fragment key={idx}>
+                    <div className="text-2xl text-gray-300 dark:text-neutral-700 font-light hidden sm:block">+</div>
+                    <div className="flex-shrink-0 text-center">
+                      <Link href={acc.href} className="block">
+                        <div className="w-28 h-28 mx-auto bg-white dark:bg-neutral-900 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-700 shadow-sm mb-2 hover:border-black dark:hover:border-white transition-colors">
+                          <img
+                            src={`https://images.unsplash.com/${acc.img}?w=112&q=75&fit=crop`}
+                            alt={acc.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 max-w-[112px] line-clamp-2">{acc.name}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white mt-1">€{acc.price.toFixed(2)}</p>
+                      </Link>
+                    </div>
+                  </React.Fragment>
+                ))}
+
+                <div className="sm:ml-auto text-center sm:text-right">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total del look</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-3">€{(product.price + 12.99 + 8.99).toFixed(2)}</p>
+                  <Link
+                    href="/carrito"
+                    className="inline-flex items-center gap-2 bg-black dark:bg-white text-white dark:text-black px-5 py-3 text-xs font-bold uppercase tracking-wider rounded-xl hover:opacity-90 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    Añadir todo al look
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         <RecentlyViewed currentProductId={product.id} />
       </div>
 
       <Footer />
       {showSizeGuide && <SizeGuide onClose={() => setShowSizeGuide(false)} />}
       {product && <StickyAddToCart product={product} onAddToCart={handleAddToCart} visible={showStickyCart && (product.in_stock !== false)} />}
+      {showLightbox && imagesToShow.length > 0 && <ImageLightbox images={imagesToShow} initialIndex={selectedImage} onClose={() => setShowLightbox(false)} />}
     </div>
   );
 }

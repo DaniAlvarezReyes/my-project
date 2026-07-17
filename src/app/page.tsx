@@ -11,10 +11,17 @@ import RecentlyViewed from '@/components/RecentlyViewed';
 import SplitText from '@/components/SplitText';
 import InstagramFeed from '@/components/InstagramFeed';
 
-const heroSlides = [
-  { image: 'https://images.unsplash.com/photo-1556906781-9a412961c28c?w=1920&q=80', subtitle: 'Nueva Colección 2025', title: 'Define tu propio estilo', cta: 'Explorar tienda', href: '/productos' },
+type HeroSlide = {
+  subtitle: string; title: string; cta: string; href: string;
+  image?: string;
+  video?: string;
+  poster?: string;
+};
+
+const heroSlides: HeroSlide[] = [
+  { video: 'https://cdn.coverr.co/videos/coverr-person-running-with-white-nike-shoes/1080p.mp4', poster: 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=1920&q=80', subtitle: 'Nueva Colección 2025', title: 'Define tu propio estilo', cta: 'Explorar tienda', href: '/productos' },
   { image: 'https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb?w=1920&q=80', subtitle: 'Ofertas Exclusivas', title: 'Hasta -40% en selección', cta: 'Ver ofertas', href: '/productos?filter=ofertas' },
-  { image: 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=1920&q=80', subtitle: 'Running 2025', title: 'Corre sin límites', cta: 'Ver running', href: '/productos?categoria=running' },
+  { image: 'https://images.unsplash.com/photo-1556906781-9a412961c28c?w=1920&q=80', subtitle: 'Running 2025', title: 'Corre sin límites', cta: 'Ver running', href: '/productos?categoria=running' },
 ];
 
 export default function Home() {
@@ -29,7 +36,8 @@ export default function Home() {
         const { data } = await supabase
           .from('products')
           .select('*, color_variants:product_color_variants(color_name, color_hex, images)')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(100);
         if (data) setProducts(data);
       } catch {}
     };
@@ -69,7 +77,21 @@ export default function Home() {
             className="absolute inset-0 transition-opacity duration-1000"
             style={{ opacity: i === currentSlide ? 1 : 0 }}
           >
-            <img src={slide.image} alt="" className="w-full h-full object-cover scale-105" style={{ animation: i === currentSlide ? 'zoomSlow 8s ease-in-out forwards' : 'none' }} />
+            {slide.video ? (
+              <video
+                autoPlay={i === currentSlide}
+                muted
+                loop
+                playsInline
+                poster={slide.poster}
+                className="w-full h-full object-cover"
+              >
+                <source src={slide.video} type="video/mp4" />
+                {slide.poster && <img src={slide.poster} alt="" className="w-full h-full object-cover" />}
+              </video>
+            ) : (
+              <img src={slide.image} alt="" className="w-full h-full object-cover scale-105" style={{ animation: i === currentSlide ? 'zoomSlow 8s ease-in-out forwards' : 'none' }} />
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           </div>
         ))}

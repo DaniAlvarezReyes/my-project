@@ -152,7 +152,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.password.length < 6) return { success: false, error: 'La contraseña debe tener al menos 6 caracteres' };
       if (!data.acceptTerms) return { success: false, error: 'Debes aceptar los términos y condiciones' };
 
-      const isAdminEmail = data.email === 'danielalvarezreyes99@gmail.com';
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email, password: data.password,
         options: { data: { name: data.name, last_name: data.lastName } },
@@ -161,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (authData.user) {
         await new Promise(r => setTimeout(r, 500));
         await supabase.from('profiles').update({
-          last_name: data.lastName, role: isAdminEmail ? 'admin' : 'customer',
+          last_name: data.lastName, role: 'customer',
         }).eq('id', authData.user.id);
         await loadUserProfile(authData.user.id, data.email, { name: data.name, last_name: data.lastName });
         return { success: true };

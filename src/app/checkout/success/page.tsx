@@ -31,13 +31,8 @@ function SuccessContent() {
       }
 
       try {
-        if (method === 'stripe' && sessionId) {
-          await supabase
-            .from('orders')
-            .update({ status: 'processing', payment_intent_id: sessionId })
-            .eq('id', orderId)
-            .eq('status', 'pending');
-        }
+        // Note: order status is updated by the Stripe webhook (checkout.session.completed).
+        // We only read the order here — no client-side status writes.
 
         const { data } = await supabase
           .from('orders')

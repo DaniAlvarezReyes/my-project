@@ -28,7 +28,7 @@ export const MainNav = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileSubmenu, setMobileSubmenu] = useState<string | null>(null);
   const { user, isAuthenticated, isAdmin, logout } = useAuth();
-  const { itemCount } = useCart();
+  const { itemCount, syncing } = useCart();
   const { favorites } = useFavorites();
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
@@ -253,6 +253,7 @@ export const MainNav = () => {
               <Link href="/carrito" className="relative p-1.5 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">
                 <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                 {itemCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-black dark:bg-white text-white dark:text-black text-[8px] font-bold rounded-full flex items-center justify-center">{itemCount}</span>}
+                {syncing && <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Sincronizando carrito..." />}
               </Link>
             </div>
           </div>

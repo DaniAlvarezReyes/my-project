@@ -43,28 +43,36 @@ export async function POST(request: NextRequest) {
     const accessToken = await getPayPalAccessToken();
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+    // Los precios ya incluyen IVA — no usar tax_total por separado.
+    // breakdown: item_total + shipping = amount.value exactamente
+    const itemsSubtotal = items.reduce(
+      (sum: number, item: any) => sum + item.product.price * item.quantity,
+      0
+    );
+    const shippingAmount = Math.max(0, parseFloat((amount - itemsSubtotal).toFixed(2)));
+
+    const amountBreakdown: Record<string, { currency_code: string; value: string }> = {
+      item_total: {
+        currency_code: 'EUR',
+        value: itemsSubtotal.toFixed(2),
+      },
+    };
+    if (shippingAmount > 0.001) {
+      amountBreakdown.shipping = {
+        currency_code: 'EUR',
+        value: shippingAmount.toFixed(2),
+      };
+    }
+
     const paypalOrder = {
       intent: 'CAPTURE',
       purchase_units: [{
         reference_id: orderId,
-        description: `Sneakers Pro - Pedido`,
+        description: 'Sneakers Pro - Pedido',
         amount: {
           currency_code: 'EUR',
           value: amount.toFixed(2),
-          breakdown: {
-            item_total: {
-              currency_code: 'EUR',
-              value: items.reduce((sum: number, item: any) => 
-                sum + (item.product.price * item.quantity), 0
-              ).toFixed(2),
-            },
-            tax_total: {
-              currency_code: 'EUR',
-              value: (items.reduce((sum: number, item: any) => 
-                sum + (item.product.price * item.quantity), 0
-              ) * 0.21).toFixed(2),
-            },
-          },
+          breakdown: amountBreakdown,
         },
         items: items.map((item: any) => ({
           name: item.product.name.substring(0, 127),
@@ -105,7 +113,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find approval URL
     const approvalUrl = data.links?.find((link: any) => link.rel === 'approve')?.href;
 
     return NextResponse.json({

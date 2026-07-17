@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2023-10-16',
 });
 
 // Use service role key for webhook (server-side, bypasses RLS)
@@ -37,9 +37,17 @@ export async function POST(request: NextRequest) {
         await handlePaymentSuccess(session);
         break;
       }
+      case 'checkout.session.expired': {
+        // User abandoned the Stripe checkout — cancel order (trigger restores stock)
+        const session = event.data.object as Stripe.Checkout.Session;
+        const orderId = session.metadata?.orderId;
+        if (orderId) await cancelOrder(orderId, 'session expired');
+        break;
+      }
       case 'payment_intent.payment_failed': {
         const pi = event.data.object as Stripe.PaymentIntent;
-        await handlePaymentFailed(pi);
+        const orderId = pi.metadata?.orderId;
+        if (orderId) await cancelOrder(orderId, 'payment failed');
         break;
       }
       default:
@@ -90,21 +98,21 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
   }
 }
 
-async function handlePaymentFailed(pi: Stripe.PaymentIntent) {
-  const orderId = pi.metadata?.orderId;
-  if (!orderId) return;
-
+async function cancelOrder(orderId: string, reason: string) {
   try {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('orders')
-      .update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', orderId);
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .neq('status', 'cancelled'); // idempotent — don't re-trigger if already cancelled
 
-    console.log(`❌ Order ${orderId} marked as cancelled (payment failed)`);
+    if (error) {
+      console.error(`cancelOrder error (${reason}):`, error);
+      return;
+    }
+    // Stock is restored automatically by the trigger_restore_stock_on_cancel DB trigger
+    console.log(`❌ Order ${orderId} cancelled (${reason})`);
   } catch (err) {
-    console.error('handlePaymentFailed error:', err);
+    console.error('cancelOrder error:', err);
   }
 }

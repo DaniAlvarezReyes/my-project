@@ -30,11 +30,15 @@ interface Product {
   category: string;
   subcategory?: string;
   base_price: number;
+  price?: number;          // alias of base_price from DB
   original_price?: number;
   rating: number;
-  reviews_count: number;
+  reviews_count?: number;
+  reviews?: number;        // DB column name
   in_stock: boolean;
   total_stock: number;
+  stock?: number;          // DB column name
+  images?: string[];       // from DB
   badge?: string;
   color_variants?: ColorVariant[];
 }

@@ -12,6 +12,7 @@ const defaultSections: FooterSection[] = [
     { label: 'Todos los productos', href: '/productos' },
     { label: 'Ofertas', href: '/productos?filter=ofertas' },
     { label: 'Categorías', href: '/categorias' },
+    { label: 'Nuestra historia', href: '/nosotros' },
   ]},
   { title: 'Soporte', links: [
     { label: 'Contacto', href: '/contacto' },

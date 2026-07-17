@@ -26,6 +26,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = 'â
   const toast = useToast();
   const isLiked = isFavorite(product.id);
   const [activeColor, setActiveColor] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   const originalPrice = product.originalPrice || (product as any).original_price;
   const inStock = product.inStock ?? (product as any).in_stock ?? true;
@@ -51,13 +52,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = 'â
     }
   });
 
-  // Which image to show
-  const displayImage = activeColor && colorImageMap[activeColor.toLowerCase()]
-    ? colorImageMap[activeColor.toLowerCase()]
+  // Which image to show: clicked color > hovered color > default
+  const activeColorKey = (selectedColor || activeColor)?.toLowerCase();
+  const displayImage = activeColorKey && colorImageMap[activeColorKey]
+    ? colorImageMap[activeColorKey]
     : images[0] || 'https://via.placeholder.com/600x800?text=No+Image';
 
-  // Secondary image for swap (only when no color hovered)
-  const secondaryImage = !activeColor && images.length >= 2 ? images[1] : null;
+  // Secondary image for swap (only when no color active)
+  const secondaryImage = !activeColorKey && images.length >= 2 ? images[1] : null;
 
   const handleClick = () => router.push(`/productos/${product.id}`);
 
@@ -100,7 +102,36 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = 'â
                 <span key={s} className="px-2 py-1 text-[10px] font-bold border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300">{s}</span>
               ))}
             </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (sizes.length > 0) {
+                  // Navigate to product for size selection
+                  router.push(`/productos/${product.id}`);
+                } else {
+                  addItem(product as any, 1, '', '');
+                  toast.success(`${product.name} aÃ±adido`);
+                }
+              }}
+              className="mt-2 w-full py-1.5 bg-black dark:bg-white text-white dark:text-black text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity"
+            >
+              {sizes.length > 0 ? 'Seleccionar talla â†’' : 'AÃ±adir al carrito'}
+            </button>
           </div>
+        )}
+
+        {/* Quick-add for products without sizes */}
+        {sizes.length === 0 && inStock && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              addItem(product as any, 1, '', '');
+              toast.success(`${product.name} aÃ±adido`);
+            }}
+            className="absolute bottom-3 left-3 right-3 py-2 bg-black/90 dark:bg-white/90 text-white dark:text-black text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
+          >
+            + AÃ±adir al carrito
+          </button>
         )}
 
         {!inStock && (
@@ -118,9 +149,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = 'â
               key={c}
               onMouseEnter={() => setActiveColor(c)}
               onMouseLeave={() => setActiveColor(null)}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setSelectedColor(prev => prev === c ? null : c); }}
               className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-200 ${
-                activeColor === c
+                selectedColor === c || (!selectedColor && activeColor === c)
                   ? 'scale-125 border-black dark:border-white'
                   : 'scale-100 border-neutral-300 dark:border-neutral-600'
               }`}
@@ -136,10 +167,40 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = 'â
       <div className="space-y-1">
         <p className="text-[11px] text-neutral-400 uppercase tracking-widest font-medium">{product.brand}</p>
         <h3 className="text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-snug line-clamp-2 group-hover:underline underline-offset-2">{product.name}</h3>
+
+        {/* Rating + social proof */}
+        {product.rating != null && product.rating > 0 && (
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <div className="flex">
+              {[1,2,3,4,5].map(star => (
+                <svg
+                  key={star}
+                  className={`w-3 h-3 ${star <= Math.round(product.rating!) ? 'text-yellow-400' : 'text-neutral-200 dark:text-neutral-700'}`}
+                  fill="currentColor" viewBox="0 0 20 20"
+                >
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
+            </div>
+            <span className="text-[10px] text-neutral-400 leading-none">
+              {product.rating.toFixed(1)}
+              {product.reviews != null && product.reviews > 0 && (
+                <span className="ml-0.5">({product.reviews > 999 ? `${Math.floor(product.reviews/1000)}k` : product.reviews})</span>
+              )}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 pt-0.5">
           <span className="text-sm font-bold text-neutral-900 dark:text-white">{currency}{product.price.toFixed(2)}</span>
           {originalPrice && originalPrice > product.price && (
             <span className="text-xs text-neutral-400 line-through">{currency}{originalPrice.toFixed(2)}</span>
+          )}
+          {/* Vendidos badge â€” shown for popular items */}
+          {product.reviews != null && product.reviews > 20 && (
+            <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+              +{product.reviews > 500 ? '500' : product.reviews > 100 ? '100' : '20'} vendidos
+            </span>
           )}
         </div>
       </div>

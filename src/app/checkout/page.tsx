@@ -11,6 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { supabase } from '@/lib/supabase';
 import { useLoyaltyPoints } from '@/components/LoyaltyPoints';
+import { isValidEmail } from '@/lib/security';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -196,26 +197,27 @@ function CheckoutContent() {
     }));
     await supabase.from('order_items').insert(orderItems);
 
-    // Decrement stock safely
-    for (const item of items) {
-      try {
-        const { data: current } = await supabase
-          .from('products')
-          .select('stock')
-          .eq('id', item.product.id)
-          .maybeSingle();
-        if (current && current.stock != null) {
-          await supabase
-            .from('products')
-            .update({ stock: Math.max(0, current.stock - item.quantity) })
-            .eq('id', item.product.id);
-        }
-      } catch {}
+    // El stock se decrementa automáticamente vía trigger en BD (fn_decrement_product_stock)
+    // No es necesario hacerlo manualmente desde el cliente.
+
+    // Use coupon atomically via RPC to prevent race conditions
+    if (appliedCoupon) {
+      await supabase.rpc('increment_coupon_uses', { coupon_id: appliedCoupon.id })
+        .then(({ error }) => { if (error) console.warn('Coupon increment failed:', error.message); });
     }
 
-    // Use coupon
-    if (appliedCoupon) {
-      await supabase.from('coupons').update({ uses: (appliedCoupon.uses || 0) + 1 }).eq('id', appliedCoupon.id);
+    // Save shipping address silently (non-critical)
+    if (user?.id) {
+      const { count } = await supabase.from('addresses').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+      supabase.from('addresses').insert({
+        user_id: user.id,
+        street: shippingInfo.street,
+        city: shippingInfo.city,
+        state: shippingInfo.state,
+        postal_code: shippingInfo.postalCode,
+        country: shippingInfo.country,
+        is_default: (count ?? 0) === 0,
+      }).then(({ error }) => { if (error) console.warn('Address save failed:', error.message); });
     }
 
     return order.id;
@@ -238,10 +240,10 @@ function CheckoutContent() {
       if (!res.ok) throw new Error(data.error);
 
       const stripe = await stripePromise;
-      if (stripe && data.sessionId) {
-        const { error: stripeErr } = await stripe.redirectToCheckout({ sessionId: data.sessionId });
-        if (stripeErr) throw stripeErr;
-      }
+      if (!stripe) throw new Error('No se pudo cargar el procesador de pagos. Recarga la página e inténtalo de nuevo.');
+      if (!data.sessionId) throw new Error('No se recibió sesión de pago. Inténtalo de nuevo.');
+      const { error: stripeErr } = await stripe.redirectToCheckout({ sessionId: data.sessionId });
+      if (stripeErr) throw stripeErr;
     } catch (err: any) {
       setError(err.message || 'Error al procesar el pago');
       setLoading(false);
@@ -268,6 +270,14 @@ function CheckoutContent() {
   const validateShipping = () => {
     if (!shippingInfo.name || !shippingInfo.email || !shippingInfo.street || !shippingInfo.city || !shippingInfo.postalCode) {
       setError('Completa todos los campos obligatorios');
+      return false;
+    }
+    if (!isValidEmail(shippingInfo.email)) {
+      setError('Introduce un email válido');
+      return false;
+    }
+    if (!/^\d{4,5}$/.test(shippingInfo.postalCode.trim())) {
+      setError('El código postal debe tener 4 o 5 dígitos');
       return false;
     }
     setError('');
@@ -300,6 +310,19 @@ function CheckoutContent() {
               <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span className="text-sm">{error}</span>
+              </div>
+            )}
+
+            {/* Guest banner */}
+            {!isAuthenticated && !authLoading && (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <p className="text-sm text-blue-700">Compras como invitado. <span className="hidden sm:inline">Inicia sesión para guardar tu pedido y ganar puntos de fidelidad.</span></p>
+                </div>
+                <a href={`/auth/login?redirect=/checkout`} className="flex-shrink-0 text-xs font-bold text-blue-700 border border-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
+                  Iniciar sesión
+                </a>
               </div>
             )}
 
@@ -582,6 +605,11 @@ function CheckoutContent() {
                 <div className="flex items-center gap-2 text-xs text-gray-500">
                   <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   Garantía de satisfacción
+                </div>
+                <div className="pt-3 border-t mt-1 text-center">
+                  <a href="/legal/devoluciones" target="_blank" className="text-xs text-blue-600 hover:underline">
+                    Ver política de devoluciones completa →
+                  </a>
                 </div>
               </div>
             </div>

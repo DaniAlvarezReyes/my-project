@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIP } from '@/lib/rateLimit';
+import { validateOrigin } from '@/lib/security';
 
 const PAYPAL_API = process.env.PAYPAL_MODE === 'live'
   ? 'https://api-m.paypal.com'
@@ -30,6 +31,14 @@ async function getPayPalAccessToken() {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIP(request);
+  const { allowed } = checkRateLimit(`paypal-capture:${ip}`, { maxRequests: 5, windowMs: 60_000 });
+  if (!allowed) return NextResponse.json({ error: 'Demasiados intentos' }, { status: 429 });
+
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Origen no autorizado' }, { status: 403 });
+  }
+
   try {
     const { paypalOrderId, orderId } = await request.json();
 

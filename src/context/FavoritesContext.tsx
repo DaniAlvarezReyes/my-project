@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
 
 const GUEST_FAV_KEY = 'guest_favorites';
 
@@ -22,6 +23,7 @@ export const useFavorites = () => {
 
 export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
+  const toast = useToast();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const prevUserRef = useRef<string | null>(null);
@@ -54,6 +56,7 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setFavorites(dbFavs);
         } catch {
           setFavorites([]);
+          toast.error('No se pudieron cargar tus favoritos. Inténtalo de nuevo.');
         }
       } else {
         // Guest: load from localStorage
@@ -81,7 +84,10 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         } else {
           await supabase.from('favorites').insert({ user_id: user.id, product_id: productId });
         }
-      } catch {}
+      } catch {
+        setFavorites(favorites);
+        toast.error('No se pudo actualizar tus favoritos. Inténtalo de nuevo.');
+      }
     } else {
       localStorage.setItem(GUEST_FAV_KEY, JSON.stringify(newFavs));
     }

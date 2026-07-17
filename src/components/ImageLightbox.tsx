@@ -77,7 +77,8 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
 
       {/* Imagen principal */}
       <div
-        className="max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center p-4"
+        className="max-w-7xl w-full flex items-center justify-center p-4"
+        style={{ height: '85vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         <img

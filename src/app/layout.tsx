@@ -12,6 +12,7 @@ import ScrollToTop from '@/components/ScrollToTop';
 import PushNotificationPrompt from '@/components/PushNotificationPrompt';
 import PageTransition from '@/components/PageTransition';
 import AIAssistant from '@/components/AIAssistant';
+import WhatsAppButton from '@/components/WhatsAppButton';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -51,9 +52,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} bg-white dark:bg-black text-neutral-900 dark:text-neutral-100`}>
         <ThemeProvider>
           <AuthProvider>
-            <CartProvider>
-              <FavoritesProvider>
-                <ToastProvider>
+            <ToastProvider>
+              <CartProvider>
+                <FavoritesProvider>
                   <ConfirmProvider>
                     <PageTransition>
                       {children}
@@ -62,10 +63,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <ScrollToTop />
                     <PushNotificationPrompt />
                     <AIAssistant />
+                    <WhatsAppButton />
                   </ConfirmProvider>
-                </ToastProvider>
-              </FavoritesProvider>
-            </CartProvider>
+                </FavoritesProvider>
+              </CartProvider>
+            </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

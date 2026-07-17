@@ -14,6 +14,7 @@ export default function PedidosPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -27,6 +28,26 @@ export default function PedidosPage() {
       setLoading(false);
     }
   }, [authLoading, isAuthenticated, user?.id]);
+
+  const cancelOrder = async (orderId: string) => {
+    if (!confirm('¿Seguro que quieres cancelar este pedido?')) return;
+    setCancellingId(orderId);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+        .eq('user_id', user!.id)
+        .eq('status', 'pending');
+      if (!error) {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+      }
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const loadOrders = async () => {
     if (!user?.id) {
@@ -104,20 +125,54 @@ export default function PedidosPage() {
                         order.status === 'completed' ? 'bg-green-100 text-green-800' :
                         order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
                         order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {order.status === 'completed' ? 'Completado' :
                          order.status === 'processing' ? 'Procesando' :
-                         order.status === 'pending' ? 'Pendiente' : order.status}
+                         order.status === 'pending' ? 'Pendiente' :
+                         order.status === 'cancelled' ? 'Cancelado' : order.status}
                       </span>
                     </div>
                     <div className="border-t pt-4">
                       <p className="text-2xl font-bold text-gray-900">€{order.total.toFixed(2)}</p>
-                      <Link href={`/cuenta/pedidos/${order.id}`} className="mt-3 block">
-                        <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                          Ver Detalles Completos
-                        </button>
-                      </Link>
+                      {order.tracking_number && (
+                        <div className="mt-2 flex items-center gap-2 text-sm">
+                          <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                          <span className="text-gray-600">Seguimiento:</span>
+                          <a
+                            href={`/seguimiento?n=${order.tracking_number}&pedido=${order.id}`}
+                            className="font-mono font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                          >
+                            {order.tracking_number}
+                          </a>
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-3">
+                        <Link href={`/cuenta/pedidos/${order.id}`} className="flex-1">
+                          <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                            Ver Detalles
+                          </button>
+                        </Link>
+                        {(order.status === 'processing' || order.status === 'completed') && (
+                          <a
+                            href={`/seguimiento?pedido=${order.id}${order.tracking_number ? `&n=${order.tracking_number}` : ''}`}
+                            className="px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-medium text-sm flex items-center gap-1 whitespace-nowrap"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                            Rastrear
+                          </a>
+                        )}
+                        {order.status === 'pending' && (
+                          <button
+                            onClick={() => cancelOrder(order.id)}
+                            disabled={cancellingId === order.id}
+                            className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 font-medium text-sm disabled:opacity-50"
+                          >
+                            {cancellingId === order.id ? 'Cancelando...' : 'Cancelar'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
