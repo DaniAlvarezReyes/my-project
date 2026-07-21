@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ImageLightboxProps {
   images: string[];
@@ -9,6 +10,8 @@ interface ImageLightboxProps {
 
 export default function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -38,7 +41,9 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] bg-black bg-opacity-95 flex items-center justify-center"
       onClick={onClose}
@@ -139,6 +144,7 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
         <div>← → para navegar</div>
         <div>ESC para cerrar</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

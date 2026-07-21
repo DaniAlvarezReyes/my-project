@@ -15,6 +15,7 @@ interface CartContextType {
   addItem: (product: Product, quantity?: number, size?: string, color?: string) => void;
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
+  changeVariant: (cartItemId: string, size?: string, color?: string) => void;
   clearCart: () => void;
   isInCart: (productId: string) => boolean;
 }
@@ -267,6 +268,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems(prev => prev.map(item => item.id === cartItemId ? { ...item, quantity } : item));
   }, [removeItem]);
 
+  // Cambiar la talla y/o color de una línea del carrito.
+  // Recalcula el id de la línea; si ya existe una línea con esa variante, fusiona cantidades.
+  const changeVariant = useCallback((cartItemId: string, size?: string, color?: string) => {
+    setItems(prev => {
+      const item = prev.find(i => i.id === cartItemId);
+      if (!item) return prev;
+      const normalizedSize = size?.trim() || undefined;
+      const normalizedColor = color?.trim() || undefined;
+      const newId = makeCartItemId(item.product.id, normalizedSize, normalizedColor);
+      if (newId === cartItemId) return prev;
+
+      const existing = prev.find(i => i.id === newId);
+      if (existing) {
+        // Ya hay una línea con esa variante → sumamos cantidades y quitamos la antigua
+        return prev
+          .filter(i => i.id !== cartItemId)
+          .map(i => i.id === newId ? { ...i, quantity: i.quantity + item.quantity } : i);
+      }
+      return prev.map(i =>
+        i.id === cartItemId
+          ? { ...i, id: newId, selectedSize: normalizedSize, selectedColor: normalizedColor }
+          : i
+      );
+    });
+  }, []);
+
   const clearCart = useCallback(async () => {
     setItems([]);
     try { localStorage.removeItem(getCartKey(user?.id)); } catch {}
@@ -280,7 +307,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const isInCart = useCallback((productId: string) => items.some(item => item.product.id === productId), [items]);
 
   return (
-    <CartContext.Provider value={{ items, itemCount, subtotal, shipping, total, syncing, addItem, removeItem, updateQuantity, clearCart, isInCart }}>
+    <CartContext.Provider value={{ items, itemCount, subtotal, shipping, total, syncing, addItem, removeItem, updateQuantity, changeVariant, clearCart, isInCart }}>
       {children}
     </CartContext.Provider>
   );

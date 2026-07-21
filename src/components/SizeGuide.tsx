@@ -1,5 +1,6 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const sizeData = [
   { eu: '36', uk: '3.5', us_m: '4', us_w: '5.5', cm: '22.5' },
@@ -22,9 +23,23 @@ const sizeData = [
 
 export default function SizeGuide({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<'table' | 'measure'>('table');
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+  useEffect(() => {
+    setMounted(true);
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = 'unset';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={onClose}>
       <div
         className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -72,9 +87,9 @@ export default function SizeGuide({ onClose }: { onClose: () => void }) {
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">EU</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-700">UK</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">US (H)</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">US (M)</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">CM</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">US Hombre</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">US Mujer</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">CM (largo del pie)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -85,6 +100,7 @@ export default function SizeGuide({ onClose }: { onClose: () => void }) {
                       <td className="px-4 py-2.5 text-gray-700">{row.us_m}</td>
                       <td className="px-4 py-2.5 text-gray-700">{row.us_w}</td>
                       <td className="px-4 py-2.5 text-gray-700">{row.cm}</td>
+                      {/* us_m = US Hombre · us_w = US Mujer · cm = largo del pie */}
                     </tr>
                   ))}
                 </tbody>
@@ -139,6 +155,7 @@ export default function SizeGuide({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

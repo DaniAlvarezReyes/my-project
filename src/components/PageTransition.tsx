@@ -16,10 +16,14 @@ export default function PageTransition({ children }: { children: React.ReactNode
     return () => clearTimeout(timer);
   }, [pathname]);
 
+  // IMPORTANTE: no usar `transform` (translate) de forma permanente aquí.
+  // Un transform en un ancestro rompe `position: fixed` de los modales
+  // (lightbox, guía de tallas…), que se renderizarían fuera de la vista.
+  // Por eso animamos solo la opacidad.
   return (
     <div
-      className={`transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
+      className={`transition-opacity duration-300 ${
+        isTransitioning ? 'opacity-0' : 'opacity-100'
       }`}
     >
       {displayChildren}

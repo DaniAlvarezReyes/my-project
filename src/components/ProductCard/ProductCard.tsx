@@ -27,6 +27,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = '�
   const isLiked = isFavorite(product.id);
   const [activeColor, setActiveColor] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
 
   const originalPrice = product.originalPrice || (product as any).original_price;
   const inStock = product.inStock ?? (product as any).in_stock ?? true;
@@ -63,6 +64,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = '�
 
   const handleClick = () => router.push(`/productos/${product.id}`);
 
+  // Añadir al carrito directamente desde la tarjeta (color + talla elegidos aquí)
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (colors.length > 0 && !selectedColor) {
+      toast.warning('Elige un color');
+      return;
+    }
+    if (sizes.length > 0 && !selectedSize) {
+      toast.warning('Elige una talla');
+      return;
+    }
+    const color = selectedColor || (colors[0] || '');
+    addItem(product as any, 1, selectedSize || '', color);
+    // addItem ya muestra su propio toast de carrito
+  };
+
   return (
     <div className="group cursor-pointer" onClick={handleClick}>
       {/* Image container */}
@@ -93,41 +110,67 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, currency = '�
           <svg className="w-4 h-4" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
         </button>
 
-        {/* Sizes on hover */}
-        {sizes.length > 0 && inStock && (
-          <div className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-black/95 backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10 p-3">
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2">Tallas disponibles</p>
-            <div className="flex flex-wrap gap-1">
-              {sizes.map((s: string) => (
-                <span key={s} className="px-2 py-1 text-[10px] font-bold border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300">{s}</span>
-              ))}
-            </div>
+        {/* Panel de compra rápida en hover: color + talla + añadir */}
+        {(sizes.length > 0 || colors.length > 0) && inStock && (
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-black/95 backdrop-blur-sm translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10 p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {colors.length > 0 && (
+              <>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-1.5">
+                  Color{selectedColor ? `: ${selectedColor}` : ''}
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {colors.slice(0, 6).map((c: string) => (
+                    <button
+                      key={c}
+                      onClick={(e) => { e.stopPropagation(); setSelectedColor(prev => prev === c ? null : c); }}
+                      className={`w-5 h-5 rounded-full border-2 transition-all ${
+                        selectedColor === c ? 'scale-110 border-black dark:border-white ring-1 ring-black dark:ring-white' : 'border-neutral-300 dark:border-neutral-600'
+                      }`}
+                      style={{ backgroundColor: COLOR_HEX[c.toLowerCase()] || '#9ca3af' }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+            {sizes.length > 0 && (
+              <>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-1.5">
+                  Talla{selectedSize ? `: ${selectedSize}` : ''}
+                </p>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {sizes.map((s: string) => (
+                    <button
+                      key={s}
+                      onClick={(e) => { e.stopPropagation(); setSelectedSize(prev => prev === s ? null : s); }}
+                      className={`px-2 py-1 text-[10px] font-bold border transition-colors ${
+                        selectedSize === s
+                          ? 'bg-black text-white border-black dark:bg-white dark:text-black dark:border-white'
+                          : 'border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-black dark:hover:border-white'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (sizes.length > 0) {
-                  // Navigate to product for size selection
-                  router.push(`/productos/${product.id}`);
-                } else {
-                  addItem(product as any, 1, '', '');
-                  toast.success(`${product.name} añadido`);
-                }
-              }}
-              className="mt-2 w-full py-1.5 bg-black dark:bg-white text-white dark:text-black text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity"
+              onClick={handleQuickAdd}
+              className="w-full py-1.5 bg-black dark:bg-white text-white dark:text-black text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity"
             >
-              {sizes.length > 0 ? 'Seleccionar talla →' : 'Añadir al carrito'}
+              + Añadir al carrito
             </button>
           </div>
         )}
 
-        {/* Quick-add for products without sizes */}
-        {sizes.length === 0 && inStock && (
+        {/* Quick-add para productos sin tallas ni colores */}
+        {sizes.length === 0 && colors.length === 0 && inStock && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              addItem(product as any, 1, '', '');
-              toast.success(`${product.name} añadido`);
-            }}
+            onClick={handleQuickAdd}
             className="absolute bottom-3 left-3 right-3 py-2 bg-black/90 dark:bg-white/90 text-white dark:text-black text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
           >
             + Añadir al carrito

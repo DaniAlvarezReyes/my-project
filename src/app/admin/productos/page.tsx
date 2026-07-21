@@ -357,12 +357,16 @@ export default function AdminProductos() {
       return;
     }
 
+    // El stock del color es SIEMPRE la suma del stock por talla (campo calculado)
+    const computedStock = currentColor.sizes.reduce((sum, s) => sum + (Number(s.stock) || 0), 0);
+    const colorToSave: ColorVariant = { ...currentColor, stock: computedStock };
+
     if (editingColorIndex !== null) {
       const updated = [...colorVariants];
-      updated[editingColorIndex] = currentColor;
+      updated[editingColorIndex] = colorToSave;
       setColorVariants(updated);
     } else {
-      setColorVariants([...colorVariants, currentColor]);
+      setColorVariants([...colorVariants, colorToSave]);
     }
 
     setShowColorModal(false);
@@ -883,22 +887,10 @@ export default function AdminProductos() {
                 </div>
               </div>
 
-              {/* Stock */}
-              <div>
-                <label className="block mb-2 font-medium text-gray-700">Stock Total del Color</label>
-                <input
-                  type="number"
-                  value={currentColor.stock === 0 ? '' : currentColor.stock}
-                  onChange={(e) => setCurrentColor({ ...currentColor, stock: e.target.value === '' ? 0 : parseInt(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                />
-              </div>
-
               {/* Sizes */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="font-medium text-gray-700">Tallas Disponibles</label>
+                  <label className="font-medium text-gray-700">Tallas y stock por talla</label>
                   <button
                     type="button"
                     onClick={addSizeToCurrentColor}
@@ -950,6 +942,17 @@ export default function AdminProductos() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Stock total del color (CALCULADO a partir de las tallas) */}
+              <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-4 py-3">
+                <div>
+                  <label className="font-medium text-gray-700">Stock total del color</label>
+                  <p className="text-xs text-gray-500">Se calcula automáticamente sumando el stock de cada talla</p>
+                </div>
+                <span className="text-2xl font-bold text-gray-900">
+                  {currentColor.sizes.reduce((sum, s) => sum + (Number(s.stock) || 0), 0)}
+                </span>
               </div>
 
               {/* Available Toggle */}

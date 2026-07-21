@@ -40,8 +40,17 @@ function UrgencyBadge({ stock }: { stock?: number }) {
 }
 
 
+function variantOptions(product: any): { sizes: string[]; colors: string[] } {
+  const cv: any[] = product?.color_variants || [];
+  const sizesFromVariants = [...new Set(cv.flatMap((v: any) => (v.sizes || []).map((s: any) => s.size ?? s)))].filter(Boolean) as string[];
+  const colorsFromVariants = cv.map((v: any) => v.color_name).filter(Boolean) as string[];
+  const sizes = (sizesFromVariants.length > 0 ? sizesFromVariants : (product?.sizes || [])) as string[];
+  const colors = (colorsFromVariants.length > 0 ? colorsFromVariants : (product?.colors || [])) as string[];
+  return { sizes, colors };
+}
+
 export default function CarritoPage() {
-  const { items, subtotal, shipping, total, updateQuantity, removeItem } = useCart();
+  const { items, subtotal, shipping, total, updateQuantity, removeItem, changeVariant } = useCart();
 
   const remaining = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
   const progressPct = Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD) * 100);
@@ -136,11 +145,46 @@ export default function CarritoPage() {
                         <Link href={`/productos/${item.product.id}`}>
                           <h3 className="text-sm font-semibold text-gray-900 dark:text-white leading-snug hover:underline underline-offset-2 line-clamp-2">{item.product.name}</h3>
                         </Link>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          {item.selectedSize && <span className="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-md font-medium">T. {item.selectedSize}</span>}
-                          {item.selectedColor && <span className="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-md font-medium">{item.selectedColor}</span>}
-                          <UrgencyBadge stock={item.product.stock} />
-                        </div>
+                        {(() => {
+                          const { sizes, colors } = variantOptions(item.product);
+                          return (
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              {sizes.length > 0 ? (
+                                <label className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                  <span className="font-medium">Talla</span>
+                                  <select
+                                    value={item.selectedSize || ''}
+                                    onChange={(e) => changeVariant(item.id, e.target.value || undefined, item.selectedColor)}
+                                    className="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-200 px-2 py-1 rounded-md font-medium border-0 focus:ring-2 focus:ring-black dark:focus:ring-white cursor-pointer"
+                                  >
+                                    <option value="">—</option>
+                                    {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                </label>
+                              ) : item.selectedSize ? (
+                                <span className="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-md font-medium">T. {item.selectedSize}</span>
+                              ) : null}
+
+                              {colors.length > 0 ? (
+                                <label className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                  <span className="font-medium">Color</span>
+                                  <select
+                                    value={item.selectedColor || ''}
+                                    onChange={(e) => changeVariant(item.id, item.selectedSize, e.target.value || undefined)}
+                                    className="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-200 px-2 py-1 rounded-md font-medium border-0 focus:ring-2 focus:ring-black dark:focus:ring-white cursor-pointer"
+                                  >
+                                    <option value="">—</option>
+                                    {colors.map((c) => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                </label>
+                              ) : item.selectedColor ? (
+                                <span className="text-xs bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-md font-medium">{item.selectedColor}</span>
+                              ) : null}
+
+                              <UrgencyBadge stock={item.product.stock} />
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-lg font-bold text-gray-900 dark:text-white">€{(item.product.price * item.quantity).toFixed(2)}</p>
