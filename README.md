@@ -22,7 +22,7 @@ npm run dev                # 3. Ejecutar
 
 **Usuario demo**: `demo@sneakerspro.com` / `demo123`
 
-📖 **Setup completo**: Lee `GUIA_CONFIGURACION.md`
+📖 **Setup completo**: Ver la sección [⚙️ Configuración](#️-configuración) más abajo
 
 ---
 
@@ -89,8 +89,6 @@ src/
 supabase/
 ├── schema.sql          # Schema completo
 └── seed-products.sql   # Datos
-
-GUIA_CONFIGURACION.md   # 📖 Setup paso a paso
 ```
 
 ---
@@ -127,8 +125,6 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-📖 **Guía detallada**: `GUIA_CONFIGURACION.md` (paso a paso con capturas)
-
 ---
 
 ## 🧪 TESTING
@@ -161,9 +157,9 @@ git add . && git commit -m "Deploy" && git push
 
 ## 📚 DOCUMENTACIÓN
 
-- `GUIA_CONFIGURACION.md` - Setup completo
-- `COMO_FUNCIONA.md` - Arquitectura
-- `PROXIMOS_PASOS.md` - Mejoras futuras
+- `README.md` - Guía completa (este archivo)
+- `supabase/schema.sql` - Esquema de la base de datos
+- `supabase/seed-products.sql` - Datos de ejemplo
 
 ---
 
@@ -224,7 +220,7 @@ rm -rf node_modules && npm install
 stripe listen --forward-to localhost:3000/api/webhook
 ```
 
-**Más ayuda**: Revisa `GUIA_CONFIGURACION.md`
+**Más ayuda**: Revisa la sección [⚙️ Configuración](#️-configuración)
 
 ---
 
@@ -236,7 +232,7 @@ Tu tienda tiene:
 - ✅ Autenticación segura
 - ✅ UI profesional
 
-**Próximo paso**: Sigue `GUIA_CONFIGURACION.md`
+**Próximo paso**: Configura Supabase y Stripe (sección [⚙️ Configuración](#️-configuración))
 
 ---
 
