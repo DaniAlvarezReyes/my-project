@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIP } from '@/lib/rateLimit';
+import { validateOrigin } from '@/lib/security';
+import { priceOrder } from '@/lib/orderPricing';
 
 const PAYPAL_API = process.env.PAYPAL_MODE === 'live'
   ? 'https://api-m.paypal.com'
   : 'https://api-m.sandbox.paypal.com';
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 async function getPayPalAccessToken() {
-  const clientId = process.env.PAYPAL_CLIENT_ID;
+  // Accept both names: server-only PAYPAL_CLIENT_ID or the public one used by the SDK button
+  const clientId = process.env.PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
   const secret = process.env.PAYPAL_CLIENT_SECRET;
 
   if (!clientId || !secret) {
-    throw new Error('PayPal credentials not configured');
+    throw new Error('PayPal no está configurado (faltan NEXT_PUBLIC_PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET en .env.local)');
   }
 
   const auth = Buffer.from(`${clientId}:${secret}`).toString('base64');
@@ -25,6 +34,9 @@ async function getPayPalAccessToken() {
   });
 
   const data = await response.json();
+  if (!response.ok || !data.access_token) {
+    throw new Error('No se pudo autenticar con PayPal. Revisa las credenciales.');
+  }
   return data.access_token;
 }
 
@@ -33,35 +45,49 @@ export async function POST(request: NextRequest) {
   const { allowed } = checkRateLimit(`paypal-create:${ip}`, { maxRequests: 5, windowMs: 60_000 });
   if (!allowed) return NextResponse.json({ error: 'Demasiados intentos' }, { status: 429 });
 
-  try {
-    const { orderId, amount, items } = await request.json();
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Origen no autorizado' }, { status: 403 });
+  }
 
-    if (!orderId || !amount) {
-      return NextResponse.json({ error: 'orderId y amount requeridos' }, { status: 400 });
+  try {
+    const { orderId, items, couponCode, useLoyalty } = await request.json();
+
+    if (!orderId) {
+      return NextResponse.json({ error: 'orderId requerido' }, { status: 400 });
+    }
+
+    // Resolve the user who owns the order (needed to validate loyalty points)
+    const { data: orderRow } = await supabaseAdmin
+      .from('orders')
+      .select('user_id')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    // Recompute ALL prices server-side — never trust client-sent amounts
+    const { pricing, error: priceError } = await priceOrder(supabaseAdmin, items, {
+      couponCode,
+      useLoyalty: Boolean(useLoyalty),
+      userId: orderRow?.user_id || null,
+      excludeOrderId: orderId,
+    });
+    if (priceError || !pricing) {
+      return NextResponse.json({ error: priceError || 'Error al calcular el pedido' }, { status: 400 });
     }
 
     const accessToken = await getPayPalAccessToken();
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    // Los precios ya incluyen IVA — no usar tax_total por separado.
-    // breakdown: item_total + shipping = amount.value exactamente
-    const itemsSubtotal = items.reduce(
-      (sum: number, item: any) => sum + item.product.price * item.quantity,
-      0
-    );
-    const shippingAmount = Math.max(0, parseFloat((amount - itemsSubtotal).toFixed(2)));
+    // Prices include VAT. breakdown: item_total + shipping - discount = amount.value
+    const totalDiscount = pricing.couponDiscount + pricing.loyaltyDiscount;
 
     const amountBreakdown: Record<string, { currency_code: string; value: string }> = {
-      item_total: {
-        currency_code: 'EUR',
-        value: itemsSubtotal.toFixed(2),
-      },
+      item_total: { currency_code: 'EUR', value: pricing.subtotal.toFixed(2) },
     };
-    if (shippingAmount > 0.001) {
-      amountBreakdown.shipping = {
-        currency_code: 'EUR',
-        value: shippingAmount.toFixed(2),
-      };
+    if (pricing.shipping > 0) {
+      amountBreakdown.shipping = { currency_code: 'EUR', value: pricing.shipping.toFixed(2) };
+    }
+    if (totalDiscount > 0.001) {
+      amountBreakdown.discount = { currency_code: 'EUR', value: totalDiscount.toFixed(2) };
     }
 
     const paypalOrder = {
@@ -71,15 +97,12 @@ export async function POST(request: NextRequest) {
         description: 'Sneakers Pro - Pedido',
         amount: {
           currency_code: 'EUR',
-          value: amount.toFixed(2),
+          value: pricing.total.toFixed(2),
           breakdown: amountBreakdown,
         },
-        items: items.map((item: any) => ({
-          name: item.product.name.substring(0, 127),
-          unit_amount: {
-            currency_code: 'EUR',
-            value: item.product.price.toFixed(2),
-          },
+        items: pricing.items.map((item) => ({
+          name: item.name.substring(0, 127),
+          unit_amount: { currency_code: 'EUR', value: item.unitPrice.toFixed(2) },
           quantity: String(item.quantity),
           category: 'PHYSICAL_GOODS',
         })),
@@ -112,6 +135,17 @@ export async function POST(request: NextRequest) {
         { status: response.status }
       );
     }
+
+    // Keep the order row in sync with the server-validated total
+    await supabaseAdmin
+      .from('orders')
+      .update({
+        subtotal: pricing.subtotal,
+        shipping: pricing.shipping,
+        total: pricing.total,
+        loyalty_discount: pricing.loyaltyDiscount,
+      })
+      .eq('id', orderId);
 
     const approvalUrl = data.links?.find((link: any) => link.rel === 'approve')?.href;
 

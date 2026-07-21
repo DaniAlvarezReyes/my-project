@@ -9,6 +9,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { usePathname } from 'next/navigation';
 import { categories } from '@/data/categories';
 import SearchAutocomplete from '@/components/SearchAutocomplete';
+import { NotificationBell } from '@/components/NotificationBell';
 
 const brands = [
   { name: 'Nike', slug: 'Nike' },
@@ -216,6 +217,9 @@ export const MainNav = () => {
                   <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
                 )}
               </button>
+
+              {/* Notificaciones */}
+              <NotificationBell />
 
               {/* User */}
               {isAuthenticated ? (

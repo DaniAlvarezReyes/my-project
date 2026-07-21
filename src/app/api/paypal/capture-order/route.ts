@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIP } from '@/lib/rateLimit';
 import { validateOrigin } from '@/lib/security';
+import { sendOrderConfirmationEmail } from '@/lib/email';
 
 const PAYPAL_API = process.env.PAYPAL_MODE === 'live'
   ? 'https://api-m.paypal.com'
@@ -13,8 +14,10 @@ const supabaseAdmin = createClient(
 );
 
 async function getPayPalAccessToken() {
+  // Accept both names: server-only PAYPAL_CLIENT_ID or the public one used by the SDK button
+  const clientId = process.env.PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
   const auth = Buffer.from(
-    `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`
+    `${clientId}:${process.env.PAYPAL_CLIENT_SECRET}`
   ).toString('base64');
 
   const response = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
@@ -90,13 +93,17 @@ export async function POST(request: NextRequest) {
       console.error('Error updating order:', updateError);
     }
 
-    // Simulate email
+    // Send confirmation email (real via Resend if RESEND_API_KEY is set)
     const payerEmail = data.payer?.email_address;
-    console.log('📧 [EMAIL SIMULATION] Confirmación de pedido PayPal');
-    console.log(`   Para: ${payerEmail}`);
-    console.log(`   Pedido: ${orderId}`);
-    console.log(`   PayPal Capture: ${captureId}`);
-    console.log('   → En producción: Enviar email con Resend/SendGrid');
+    const capturedAmount = Number(data.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || 0);
+    if (payerEmail) {
+      await sendOrderConfirmationEmail({
+        to: payerEmail,
+        orderId,
+        total: capturedAmount,
+        paymentMethod: 'PayPal',
+      });
+    }
 
     return NextResponse.json({
       success: true,

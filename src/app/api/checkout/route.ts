@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIP } from '@/lib/rateLimit';
 import { validateOrigin } from '@/lib/security';
+import { priceOrder } from '@/lib/orderPricing';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -26,107 +27,98 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { items, orderId, amount, shippingCost } = await request.json();
-
-    if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'No hay productos en el carrito' }, { status: 400 });
-    }
+    const { items, orderId, couponCode, useLoyalty } = await request.json();
 
     if (!orderId) {
       return NextResponse.json({ error: 'orderId requerido' }, { status: 400 });
     }
 
-    // Fetch real prices from DB — never trust client-sent prices
-    const productIds: string[] = items.map((item: any) => item.product.id);
-    const { data: dbProducts, error: dbError } = await supabaseAdmin
-      .from('products')
-      .select('id, name, brand, price, images')
-      .in('id', productIds);
+    // Resolve the user who owns the order (needed to validate loyalty points)
+    const { data: orderRow } = await supabaseAdmin
+      .from('orders')
+      .select('user_id')
+      .eq('id', orderId)
+      .maybeSingle();
 
-    if (dbError || !dbProducts) {
-      return NextResponse.json({ error: 'Error al verificar productos' }, { status: 500 });
-    }
-
-    const productMap = new Map(dbProducts.map((p: any) => [p.id, p]));
-
-    // Ensure all requested products exist
-    for (const item of items) {
-      if (!productMap.has(item.product.id)) {
-        return NextResponse.json({ error: `Producto no encontrado: ${item.product.id}` }, { status: 400 });
-      }
+    // Recompute ALL prices server-side (DB prices + validated discounts)
+    const { pricing, error: priceError } = await priceOrder(supabaseAdmin, items, {
+      couponCode,
+      useLoyalty: Boolean(useLoyalty),
+      userId: orderRow?.user_id || null,
+      excludeOrderId: orderId,
+    });
+    if (priceError || !pricing) {
+      return NextResponse.json({ error: priceError || 'Error al calcular el pedido' }, { status: 400 });
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    // Build line items using DB prices — NOT client-provided prices
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = items.map((item: any) => {
-      const dbProduct = productMap.get(item.product.id);
-      return {
-        price_data: {
-          currency: 'eur',
-          product_data: {
-            name: dbProduct.name,
-            description: `${dbProduct.brand}${item.selectedSize ? ` · Talla ${item.selectedSize}` : ''}${item.selectedColor ? ` · ${item.selectedColor}` : ''}`,
-            images: dbProduct.images?.[0] ? [dbProduct.images[0]] : [],
-          },
-          unit_amount: Math.round(dbProduct.price * 100),
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = pricing.items.map((item) => ({
+      price_data: {
+        currency: 'eur',
+        product_data: {
+          name: item.name,
+          description: `${item.brand}${item.selectedSize ? ` · Talla ${item.selectedSize}` : ''}${item.selectedColor ? ` · ${item.selectedColor}` : ''}`,
+          images: item.image ? [item.image] : [],
         },
-        quantity: item.quantity,
-      };
-    });
+        unit_amount: Math.round(item.unitPrice * 100),
+      },
+      quantity: item.quantity,
+    }));
 
-    // Compute subtotal from DB prices
-    const subtotal = items.reduce((sum: number, item: any) => {
-      const dbProduct = productMap.get(item.product.id);
-      return sum + dbProduct.price * item.quantity;
-    }, 0);
-
-    // Session config
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
       success_url: `${baseUrl}/checkout/success?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/carrito?payment_cancelled=true`,
-      metadata: {
-        orderId,
-      },
+      metadata: { orderId },
       payment_intent_data: {
         metadata: { orderId },
       },
-      // Enable Google Pay, Apple Pay, Link automatically
-      payment_method_options: {
-        card: {
-          setup_future_usage: undefined,
-        },
-      },
     };
 
-    // Add shipping as option if > 0
-    const shippingAmount = shippingCost ?? (subtotal >= 50 ? 0 : 5.99);
-    if (shippingAmount > 0) {
-      sessionConfig.shipping_options = [
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: { amount: Math.round(shippingAmount * 100), currency: 'eur' },
-            display_name: 'Envío estándar (3-5 días)',
-          },
-        },
-      ];
+    // Discounts (coupon + loyalty) — applied as a one-off Stripe coupon so the
+    // amount charged matches exactly what the web showed the customer.
+    const totalDiscount = pricing.couponDiscount + pricing.loyaltyDiscount;
+    if (totalDiscount > 0) {
+      const stripeCoupon = await stripe.coupons.create({
+        amount_off: Math.round(totalDiscount * 100),
+        currency: 'eur',
+        duration: 'once',
+        name: pricing.couponCode
+          ? `Cupón ${pricing.couponCode}${pricing.loyaltyDiscount > 0 ? ' + puntos' : ''}`
+          : 'Puntos de fidelidad',
+      });
+      sessionConfig.discounts = [{ coupon: stripeCoupon.id }];
     } else {
-      sessionConfig.shipping_options = [
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: { amount: 0, currency: 'eur' },
-            display_name: 'Envío gratuito',
-          },
-        },
-      ];
+      // allow_promotion_codes cannot be combined with `discounts`
+      sessionConfig.allow_promotion_codes = false;
     }
 
+    // Shipping (recomputed server-side)
+    sessionConfig.shipping_options = [
+      {
+        shipping_rate_data: {
+          type: 'fixed_amount',
+          fixed_amount: { amount: Math.round(pricing.shipping * 100), currency: 'eur' },
+          display_name: pricing.shipping > 0 ? 'Envío estándar (3-5 días)' : 'Envío gratuito',
+        },
+      },
+    ];
+
     const session = await stripe.checkout.sessions.create(sessionConfig);
+
+    // Keep the order row in sync with the server-validated total
+    await supabaseAdmin
+      .from('orders')
+      .update({
+        subtotal: pricing.subtotal,
+        shipping: pricing.shipping,
+        total: pricing.total,
+        loyalty_discount: pricing.loyaltyDiscount,
+      })
+      .eq('id', orderId);
 
     return NextResponse.json({ sessionId: session.id, url: session.url });
   } catch (error: any) {

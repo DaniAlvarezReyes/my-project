@@ -7,6 +7,7 @@ import { Footer } from '@/components/Footer';
 import { Button } from '@/components/Button';
 import { Rating } from '@/components/Rating';
 import { ReviewSection } from '@/components/ReviewSection';
+import { ProductComments } from '@/components/ProductComments';
 import SizeGuide from '@/components/SizeGuide';
 import { ProductDetailSkeleton } from '@/components/Skeletons';
 import RecentlyViewed, { addToRecentlyViewed } from '@/components/RecentlyViewed';
@@ -55,7 +56,7 @@ export default function ProductDetailPage() {
     try {
       const { data } = await supabase
         .from('product_comments')
-        .select('images, author_name')
+        .select('images, user_name')
         .eq('product_id', productId)
         .not('images', 'is', null)
         .limit(10);
@@ -64,7 +65,7 @@ export default function ProductDetailPage() {
         data.forEach((c: any) => {
           if (Array.isArray(c.images)) {
             c.images.slice(0, 2).forEach((url: string) => {
-              if (url) imgs.push({ url, author: c.author_name || 'Cliente' });
+              if (url) imgs.push({ url, author: c.user_name || 'Cliente' });
             });
           }
         });
@@ -525,6 +526,11 @@ export default function ProductDetailPage() {
 
         <div className="mt-16">
           <ReviewSection productId={product.id} />
+        </div>
+
+        {/* Comentarios con fotos de la comunidad */}
+        <div className="mt-12">
+          <ProductComments productId={product.id} />
         </div>
 
         <div className="my-8">

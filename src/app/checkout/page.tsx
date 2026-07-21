@@ -35,6 +35,9 @@ function CheckoutContent() {
   const [finalTotal, setFinalTotal] = useState(total);
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const paypalLoadedRef = useRef(false);
+  // Latest coupon/loyalty state for PayPal callbacks (avoids stale closures)
+  const couponRef = useRef<string | undefined>(undefined);
+  const loyaltyRef = useRef(false);
 
   const [shippingInfo, setShippingInfo] = useState({
     name: '', lastName: '', email: '', phone: '',
@@ -63,6 +66,10 @@ function CheckoutContent() {
   useEffect(() => {
     setFinalTotal(Math.max(0, total - discount - loyaltyDiscount));
   }, [total, discount, loyaltyDiscount]);
+
+  // Keep refs in sync for PayPal callbacks
+  useEffect(() => { couponRef.current = appliedCoupon?.code || undefined; }, [appliedCoupon]);
+  useEffect(() => { loyaltyRef.current = loyaltyApplied; }, [loyaltyApplied]);
 
   // Load PayPal SDK when payment step is reached and paypal is selected
   useEffect(() => {
@@ -102,7 +109,12 @@ function CheckoutContent() {
           const res = await fetch('/api/paypal/create-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId, amount: finalTotal, items }),
+            body: JSON.stringify({
+              orderId,
+              items,
+              couponCode: couponRef.current,
+              useLoyalty: loyaltyRef.current,
+            }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error);
@@ -234,7 +246,12 @@ function CheckoutContent() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, orderId, amount: finalTotal, shippingCost: shipping }),
+        body: JSON.stringify({
+          items,
+          orderId,
+          couponCode: appliedCoupon?.code || undefined,
+          useLoyalty: loyaltyApplied,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

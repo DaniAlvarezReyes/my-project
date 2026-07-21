@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { sendOrderConfirmationEmail } from '@/lib/email';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -85,12 +86,16 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
       return;
     }
 
-    // Simulate email notification (log for now)
-    console.log('📧 [EMAIL SIMULATION] Confirmación de pedido');
-    console.log(`   Para: ${session.customer_details?.email}`);
-    console.log(`   Pedido: ${orderId}`);
-    console.log(`   Total: €${(session.amount_total || 0) / 100}`);
-    console.log('   → En producción: Enviar email con Resend/SendGrid');
+    // Send confirmation email (real via Resend if RESEND_API_KEY is set)
+    const customerEmail = session.customer_details?.email;
+    if (customerEmail) {
+      await sendOrderConfirmationEmail({
+        to: customerEmail,
+        orderId,
+        total: (session.amount_total || 0) / 100,
+        paymentMethod: 'Tarjeta',
+      });
+    }
 
     console.log(`✅ Order ${orderId} updated to processing`);
   } catch (err) {

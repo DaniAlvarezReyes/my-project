@@ -32,12 +32,19 @@ export function useLoyaltyPoints() {
       try {
         const { data: orders } = await supabase
           .from('orders')
-          .select('total')
-          .eq('user_id', user.id)
-          .in('status', ['processing', 'shipped', 'delivered']);
+          .select('total, status, loyalty_discount')
+          .eq('user_id', user.id);
 
-        const totalSpent = (orders || []).reduce((s, o) => s + (o.total || 0), 0);
-        const totalPoints = Math.floor(totalSpent * POINTS_PER_EURO);
+        const rows = orders || [];
+        const totalSpent = rows
+          .filter((o: any) => ['processing', 'shipped', 'delivered'].includes(o.status))
+          .reduce((s: number, o: any) => s + (Number(o.total) || 0), 0);
+        const earnedPoints = Math.floor(totalSpent * POINTS_PER_EURO);
+        // Puntos ya canjeados en pedidos no cancelados (no se pueden gastar dos veces)
+        const redeemedPoints = rows
+          .filter((o: any) => o.status !== 'cancelled')
+          .reduce((s: number, o: any) => s + (Number(o.loyalty_discount) || 0) * POINTS_TO_EURO, 0);
+        const totalPoints = Math.max(0, earnedPoints - redeemedPoints);
         
         const currentLevel = [...LEVELS].reverse().find(l => totalPoints >= l.min) || LEVELS[0];
         const nextLevel = LEVELS[LEVELS.indexOf(currentLevel) + 1];

@@ -78,7 +78,8 @@ export const ReviewSection: React.FC<{ productId: string }> = ({ productId }) =>
     if (helpfulClicked.has(reviewId)) return;
     setHelpfulClicked(prev => new Set([...prev, reviewId]));
     setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, helpful_count: r.helpful_count + 1 } : r));
-    await supabase.from('reviews').update({ helpful_count: reviews.find(r => r.id === reviewId)!.helpful_count + 1 }).eq('id', reviewId);
+    // RPC atómico (SECURITY DEFINER) — evita que el cliente escriba valores arbitrarios
+    await supabase.rpc('increment_helpful', { review_id: reviewId });
   };
 
   const sortedReviews = [...reviews].sort((a, b) => {
